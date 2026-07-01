@@ -1,4 +1,4 @@
-import { Client, Events, GatewayIntentBits, Partials } from "discord.js";
+import { Client, Events, GatewayIntentBits, Partials, Message } from "discord.js";
 import { registerCommands } from "./deploy-commands.js";
 import { handleDmCommand } from "./commands/dm.js";
 import { registerDmLogger } from "./events/dm-logger.js";
@@ -49,6 +49,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.reply(msg);
       }
     }
+  }
+});
+
+// Selam algılayıcı
+const SELAM_PATTERN = /^(sa|selam|selamun aleyküm|selamün aleyküm|selamun aleykum)$/i;
+
+client.on(Events.MessageCreate, async (message: Message) => {
+  if (message.author.bot) return;
+  if (SELAM_PATTERN.test(message.content.trim())) {
+    await message.reply(
+      "Aleyküm Selam hoşgeldin 🌙 Bayadır seni göremiyorum canım, özledim! Nasılsın, nerelere gittin anlat da dinleyelim 😄"
+    );
   }
 });
 
