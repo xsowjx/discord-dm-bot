@@ -10,7 +10,8 @@
     "dependencies": {
       "discord.js": "^14.26.4",
       "@discordjs/voice": "^0.17.0",
-      "opusscript": "^0.1.1"
+      "opusscript": "^0.1.1",
+      "tweetnacl": "^1.0.3"
     },
     "devDependencies": {
       "@types/node": "catalog:",
