@@ -51,7 +51,6 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
     }
   });
 
-  // Hazır şiirler
   const SIIRLER = [
     "Yağmur yağar taş üstüne, taş ezilmez ama ıslanır. Sevgi böyle bir şeydir, görmezsin ama hissedersin.",
     "Gece yarısı bir mum gibi, sessizce yanarım. Kimseler görmez ama ışığım hep seninledir.",
@@ -60,7 +59,6 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
     "Sözcükler bazen yetmez, bazen bir bakış her şeyi anlatır. Sen de öylesin, gözlerin konuşur, kalbim dinler.",
   ];
 
-  // Yedek arka plan müzikleri (royalty-free)
   const MUZIK_URLS = [
     "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3",
     "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
@@ -68,35 +66,61 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
 
   let cachedMuzikBuffer: Buffer | null = null;
 
+  const YOUTUBE_PATTERN = /(?:youtube\.com\/watch|youtu\.be\/)/i;
+
+  // YouTube URL'sinden ses çek (yt-dlp)
+  async function youtubedenSesAl(url: string): Promise<Buffer | null> {
+    const tmpDir = os.tmpdir();
+    const uid = Date.now();
+    const cikisBase = path.join(tmpDir, `yt_${uid}`);
+    try {
+      await execFileAsync("yt-dlp", [
+        "-x",
+        "--audio-format", "mp3",
+        "--audio-quality", "5",
+        "-o", `${cikisBase}.%(ext)s`,
+        "--no-playlist",
+        "--max-downloads", "1",
+        "--socket-timeout", "15",
+        url,
+      ]);
+      const dosyaYolu = `${cikisBase}.mp3`;
+      if (fs.existsSync(dosyaYolu)) {
+        const buf = fs.readFileSync(dosyaYolu);
+        fs.unlinkSync(dosyaYolu);
+        return buf;
+      }
+      return null;
+    } catch (err) {
+      console.error("yt-dlp hatası:", err);
+      return null;
+    }
+  }
+
   async function getMuzikBuffer(ozelUrl?: string): Promise<Buffer | null> {
-    // Kullanıcı kendi URL'sini verdiyse onu indir
     if (ozelUrl) {
-      try {
-        const res = await fetch(ozelUrl, { signal: AbortSignal.timeout(10_000) });
-        if (res.ok) return Buffer.from(await res.arrayBuffer());
-      } catch {
-        // Başarısız → varsayılan müziğe geç
+      if (YOUTUBE_PATTERN.test(ozelUrl)) {
+        const buf = await youtubedenSesAl(ozelUrl);
+        if (buf) return buf;
+      } else {
+        try {
+          const res = await fetch(ozelUrl, { signal: AbortSignal.timeout(10_000) });
+          if (res.ok) return Buffer.from(await res.arrayBuffer());
+        } catch { /* varsayılana düş */ }
       }
     }
-
-    // Önbellek varsa kullan
     if (cachedMuzikBuffer) return cachedMuzikBuffer;
-
-    // Varsayılan müzikleri dene
     for (const url of MUZIK_URLS) {
       try {
         const res = await fetch(url, { signal: AbortSignal.timeout(12_000) });
         if (!res.ok) continue;
         cachedMuzikBuffer = Buffer.from(await res.arrayBuffer());
         return cachedMuzikBuffer;
-      } catch {
-        continue;
-      }
+      } catch { continue; }
     }
     return null;
   }
 
-  // Google TTS
   async function metniSeseCevir(metin: string): Promise<Buffer | null> {
     try {
       const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(metin)}&tl=tr&client=tw-ob`;
@@ -105,23 +129,18 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
       });
       if (!res.ok) return null;
       return Buffer.from(await res.arrayBuffer());
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }
 
-  // ffmpeg ile TTS + müzik karıştır
   async function sesiMuzikleKaristir(ttsBuffer: Buffer, muzikBuffer: Buffer): Promise<Buffer | null> {
     const tmpDir = os.tmpdir();
     const uid = Date.now();
     const ttsPath = path.join(tmpDir, `tts_${uid}.mp3`);
     const muzikPath = path.join(tmpDir, `muzik_${uid}.mp3`);
     const cikisPath = path.join(tmpDir, `siir_${uid}.mp3`);
-
     try {
       fs.writeFileSync(ttsPath, ttsBuffer);
       fs.writeFileSync(muzikPath, muzikBuffer);
-
       await execFileAsync("ffmpeg", [
         "-i", ttsPath,
         "-i", muzikPath,
@@ -131,35 +150,29 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
         "-q:a", "4",
         "-y", cikisPath,
       ]);
-
       return fs.readFileSync(cikisPath);
     } catch (err) {
       console.error("ffmpeg hatası:", err);
       return null;
     } finally {
       for (const p of [ttsPath, muzikPath, cikisPath]) {
-        try { fs.unlinkSync(p); } catch { /* yok, atla */ }
+        try { fs.unlinkSync(p); } catch { /* yok */ }
       }
     }
   }
 
-  // Metinden URL'leri ayıkla
-  const URL_REGEX = /https?://[^s]+/gi;
+  const URL_REGEX = /https?:\/\/[^\s]+/gi;
   function metindenUrlAyir(girdi: string): { metin: string; url: string | null } {
     const eslesmeler = girdi.match(URL_REGEX);
     const temizMetin = girdi.replace(URL_REGEX, "").trim();
     return { metin: temizMetin, url: eslesmeler?.[0] ?? null };
   }
 
-  // Selam algılayıcı
   const SELAM_PATTERN = /^(sa|selam|selamun aleyküm|selamün aleyküm|selamun aleykum)$/i;
-
-  // Şiir oku: "şiir oku", "şiir oku: metin", "şiir oku metin", "şiir oku metin url"
   const SIIR_PATTERN = /^şiir oku(?:(?:\s*[:\-]\s*|\s+)(.+))?$/is;
 
   client.on(Events.MessageCreate, async (message: Message) => {
     if (message.author.bot) return;
-
     const icerik = message.content.trim();
 
     if (SELAM_PATTERN.test(icerik)) {
@@ -170,16 +183,12 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
     const siirEslesmesi = icerik.match(SIIR_PATTERN);
     if (siirEslesmesi) {
       const hamGirdi = siirEslesmesi[1]?.trim() ?? "";
-
-      // URL varsa ayır, metni temizle
       const { metin: ayrikMetin, url: muzikUrl } = hamGirdi ? metindenUrlAyir(hamGirdi) : { metin: "", url: null };
-
-      // Okunacak metin: URL'siz temiz metin veya rastgele şiir
       const okunacakMetin = ayrikMetin || SIIRLER[Math.floor(Math.random() * SIIRLER.length)];
 
       await message.channel.sendTyping();
 
-      // TTS ve müziği paralel al
+      // YouTube varsa önce onu çek (zaman alabilir), TTS de paralel başlasın
       const [sesBuffer, muzikBuffer] = await Promise.all([
         metniSeseCevir(okunacakMetin),
         getMuzikBuffer(muzikUrl ?? undefined),
@@ -200,10 +209,18 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
       const ikon = finalBuffer ? "🎵" : "🎙️";
 
       const dosya = new AttachmentBuilder(gonderilecek, { name: dosyaAdi });
+
+      // suppress: true — kullanıcının orijinal mesajındaki YouTube embed'i gizle
       await message.reply({
         content: `${ikon} **Şiir okunuyor...**\n> ${okunacakMetin}`,
         files: [dosya],
+        allowedMentions: { repliedUser: false },
       });
+
+      // Orijinal mesajdaki YouTube embed'i kapat
+      try {
+        await message.suppressEmbeds(true);
+      } catch { /* izin yoksa atla */ }
     }
   });
 
