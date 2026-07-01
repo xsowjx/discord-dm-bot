@@ -10,6 +10,8 @@ if (!token) {
   process.exit(1);
 }
 
+// GuildMembers: Privileged intent — Discord Developer Portal'da etkinleştirilmeli:
+// Bot → Privileged Gateway Intents → "Server Members Intent" = ON
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
 });
