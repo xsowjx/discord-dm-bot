@@ -151,7 +151,7 @@ const SELAM_PATTERN = /^(sa|selam|selamun aleyküm|selamün aleyküm|selamun ale
 // Şiir oku algılayıcı
 // "şiir oku" → bot kendi şiirini okur
 // "şiir oku: [metin]" → verilen metni okur
-const SIIR_PATTERN = /^şiir oku(?:\s*[:\-]\s*(.+))?$/is;
+const SIIR_PATTERN = /^şiir oku(?:(?:\s*[:\-]\s*|\s+)(.+))?$/is;
 
 client.on(Events.MessageCreate, async (message: Message) => {
   if (message.author.bot) return;
