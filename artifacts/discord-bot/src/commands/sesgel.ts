@@ -9,20 +9,20 @@ import {
     createAudioPlayer,
     createAudioResource,
     AudioPlayerStatus,
-    StreamType,
     entersState,
     VoiceConnectionStatus,
     getVoiceConnection,
   } from "@discordjs/voice";
-  import { spawn } from "node:child_process";
+  import { createRequire } from "node:module";
   import * as fs from "node:fs";
   import * as os from "node:os";
   import * as path from "node:path";
-  import { createRequire } from "node:module";
 
   const require = createRequire(import.meta.url);
-  // ffmpeg-static: tüm codec'leri (libopus dahil) barındıran static binary
-  const ffmpegPath: string = require("ffmpeg-static");
+  const ffmpegStatic: string = require("ffmpeg-static");
+
+  // @discordjs/voice ve prism-media'nın kullandığı ffmpeg path'ini override et
+  process.env["FFMPEG_PATH"] = ffmpegStatic;
 
   const AUTHORIZED_ROLE = process.env.AUTHORIZED_ROLE ?? "Yetkili Ekibi";
 
@@ -32,22 +32,15 @@ import {
       const res = await fetch(url, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        console.error("TTS HTTP hatası:", res.status);
+        return null;
+      }
       return Buffer.from(await res.arrayBuffer());
-    } catch {
+    } catch (e) {
+      console.error("TTS fetch hatası:", e);
       return null;
     }
-  }
-
-  function mp3YerindenOggOpusStream(mp3Path: string) {
-    const proc = spawn(
-      ffmpegPath,
-      ["-i", mp3Path, "-c:a", "libopus", "-b:a", "96k", "-ar", "48000", "-ac", "2", "-f", "ogg", "pipe:1"],
-      { stdio: ["ignore", "pipe", "pipe"] }
-    );
-    proc.stderr.on("data", () => { /* ffmpeg verbose log yut */ });
-    proc.on("error", (e) => console.error("ffmpeg spawn hatası:", e));
-    return proc.stdout;
   }
 
   export async function handleSesgel(
@@ -100,13 +93,14 @@ import {
 
     const sesBuffer = await metniSeseCevir(metin);
     if (!sesBuffer) {
-      await interaction.editReply("❌ TTS ses üretilemedi. Biraz sonra tekrar dene.");
+      await interaction.editReply("❌ TTS ses üretilemedi.");
       return;
     }
 
     const tmpDir = os.tmpdir();
     const mp3Path = path.join(tmpDir, `sesgel_${Date.now()}.mp3`);
     fs.writeFileSync(mp3Path, sesBuffer);
+    console.log("TTS yazıldı:", mp3Path, sesBuffer.length, "bytes");
 
     let connection;
     try {
@@ -116,30 +110,27 @@ import {
         adapterCreator: interaction.guild.voiceAdapterCreator,
       });
 
-      // Zorunlu disconnect handler — voice server update gelince kopmayı önler
-      connection.on(VoiceConnectionStatus.Disconnected, async () => {
-        try {
-          await Promise.race([
-            entersState(connection!, VoiceConnectionStatus.Signalling, 5_000),
-            entersState(connection!, VoiceConnectionStatus.Connecting, 5_000),
-          ]);
-        } catch {
-          try { connection!.destroy(); } catch { /* yok */ }
-        }
+      await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+      console.log("Voice bağlantısı hazır");
+
+      // StreamType belirtmeden — @discordjs/voice kendi ffmpeg ile mp3'ü handle eder
+      const resource = createAudioResource(mp3Path);
+      const player = createAudioPlayer();
+
+      player.on("error", (err) => {
+        console.error("Player hatası:", err.message, err.resource?.metadata);
       });
 
-      await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
-
-      const oggStream = mp3YerindenOggOpusStream(mp3Path);
-      const resource = createAudioResource(oggStream, { inputType: StreamType.OggOpus });
-
-      const player = createAudioPlayer();
-      player.on("error", (err) => console.error("Player hatası:", err.message));
+      player.on("stateChange", (oldState, newState) => {
+        console.log(`Player: ${oldState.status} → ${newState.status}`);
+      });
 
       connection.subscribe(player);
       player.play(resource);
 
+      console.log("Ses çalınıyor...");
       await interaction.editReply(`🔊 **${voiceChannel.name}** kanalında söyleniyor...`);
+
       await entersState(player, AudioPlayerStatus.Idle, 60_000);
 
       connection.destroy();
@@ -148,8 +139,10 @@ import {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error("Ses kanalı hatası:", err);
       try { if (connection) connection.destroy(); } catch { /* yok */ }
-      const conn = getVoiceConnection(interaction.guild?.id ?? "");
-      if (conn) conn.destroy();
+      try {
+        const conn = getVoiceConnection(interaction.guild?.id ?? "");
+        if (conn) conn.destroy();
+      } catch { /* yok */ }
       await interaction.editReply(`❌ Hata: ${errMsg.slice(0, 200)}`);
     } finally {
       try { fs.unlinkSync(mp3Path); } catch { /* yok */ }
