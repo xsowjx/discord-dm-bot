@@ -1,6 +1,8 @@
 import {
     ChatInputCommandInteraction,
     GuildMember,
+    ChannelType,
+    PermissionsBitField,
   } from "discord.js";
   import {
     joinVoiceChannel,
@@ -39,10 +41,11 @@ import {
     }
 
     const member = interaction.member as GuildMember;
+
+    // Rol kontrolü
     const hasRole = member.roles.cache.some(
       (r) => r.name.toLowerCase() === AUTHORIZED_ROLE.toLowerCase()
     );
-
     if (!hasRole) {
       await interaction.reply({
         content: `❌ Bu komutu kullanmak için **${AUTHORIZED_ROLE}** rolü gereklidir!`,
@@ -51,13 +54,31 @@ import {
       return;
     }
 
+    // Ses kanalı kontrolü
     const voiceChannel = member.voice.channel;
     if (!voiceChannel) {
-      await interaction.reply({
-        content: "❌ Önce bir **ses kanalına** girmen lazım!",
-        ephemeral: true,
-      });
+      await interaction.reply({ content: "❌ Önce bir **ses kanalına** girmen lazım!", ephemeral: true });
       return;
+    }
+
+    // Kanal türü kontrolü
+    if (voiceChannel.type !== ChannelType.GuildVoice && voiceChannel.type !== ChannelType.GuildStageVoice) {
+      await interaction.reply({ content: "❌ Desteklenmeyen ses kanalı türü.", ephemeral: true });
+      return;
+    }
+
+    // Bot izin kontrolü
+    const botMember = interaction.guild.members.me;
+    if (botMember) {
+      const perms = voiceChannel.permissionsFor(botMember);
+      if (!perms?.has(PermissionsBitField.Flags.Connect)) {
+        await interaction.reply({ content: `❌ Botun **${voiceChannel.name}** kanalına bağlanma izni yok! Kanal izinlerini kontrol et.`, ephemeral: true });
+        return;
+      }
+      if (!perms?.has(PermissionsBitField.Flags.Speak)) {
+        await interaction.reply({ content: `❌ Botun **${voiceChannel.name}** kanalında konuşma izni yok! Kanal izinlerini kontrol et.`, ephemeral: true });
+        return;
+      }
     }
 
     const metin = interaction.options.getString("metin", true);
@@ -65,7 +86,7 @@ import {
 
     const sesBuffer = await metniSeseCevir(metin);
     if (!sesBuffer) {
-      await interaction.editReply("❌ Ses üretilemedi, biraz sonra tekrar dene.");
+      await interaction.editReply("❌ TTS ses üretilemedi. Biraz sonra tekrar dene.");
       return;
     }
 
@@ -73,14 +94,15 @@ import {
     const mp3Path = path.join(tmpDir, `sesgel_${Date.now()}.mp3`);
     fs.writeFileSync(mp3Path, sesBuffer);
 
+    let connection;
     try {
-      const connection = joinVoiceChannel({
+      connection = joinVoiceChannel({
         channelId: voiceChannel.id,
         guildId: interaction.guild.id,
         adapterCreator: interaction.guild.voiceAdapterCreator,
       });
 
-      await entersState(connection, VoiceConnectionStatus.Ready, 10_000);
+      await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
 
       const player = createAudioPlayer();
       const resource = createAudioResource(mp3Path);
@@ -88,16 +110,22 @@ import {
       player.play(resource);
 
       await interaction.editReply(`🔊 **${voiceChannel.name}** kanalında söyleniyor...`);
-
       await entersState(player, AudioPlayerStatus.Idle, 60_000);
 
       connection.destroy();
       await interaction.editReply("✅ Söylendi ve kanaldan ayrıldı!");
-    } catch (err) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error("Ses kanalı hatası:", err);
-      await interaction.editReply("❌ Ses kanalına bağlanılamadı veya bir hata oluştu.");
+
+      try {
+        if (connection) connection.destroy();
+      } catch { /* yok */ }
+
       const conn = getVoiceConnection(interaction.guild.id);
       if (conn) conn.destroy();
+
+      await interaction.editReply(`❌ Hata oluştu: ${errMsg.slice(0, 200)}`);
     } finally {
       try { fs.unlinkSync(mp3Path); } catch { /* yok */ }
     }
