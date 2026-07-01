@@ -1,7 +1,14 @@
 import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder } from "discord.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import * as os from "node:os";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { registerCommands } from "./deploy-commands.js";
 import { handleDmCommand } from "./commands/dm.js";
 import { registerDmLogger } from "./events/dm-logger.js";
+
+const execFileAsync = promisify(execFile);
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
@@ -56,6 +63,34 @@ const SIIRLER = [
   "Sözcükler bazen yetmez, bazen bir bakış her şeyi anlatır. Sen de öylesin, gözlerin konuşur, kalbim dinler.",
 ];
 
+// Arka plan müzikleri (royalty-free enstrümantal)
+const MUZIK_URLS = [
+  "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3",
+  "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+  "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+];
+
+// İndirilen müziği bellekte önbelleğe al
+let cachedMuzikBuffer: Buffer | null = null;
+
+async function getMuzikBuffer(): Promise<Buffer | null> {
+  if (cachedMuzikBuffer) return cachedMuzikBuffer;
+  for (const url of MUZIK_URLS) {
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0" },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) continue;
+      cachedMuzikBuffer = Buffer.from(await res.arrayBuffer());
+      return cachedMuzikBuffer;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 // TTS ses dosyası üret (Google Translate)
 async function metniSeseCevir(metin: string): Promise<Buffer | null> {
   try {
@@ -70,6 +105,43 @@ async function metniSeseCevir(metin: string): Promise<Buffer | null> {
     return Buffer.from(await res.arrayBuffer());
   } catch {
     return null;
+  }
+}
+
+// TTS + arka plan müziğini ffmpeg ile karıştır
+async function sesiMuzikleKaristir(
+  ttsBuffer: Buffer,
+  muzikBuffer: Buffer
+): Promise<Buffer | null> {
+  const tmpDir = os.tmpdir();
+  const uid = Date.now();
+  const ttsPath = path.join(tmpDir, `tts_${uid}.mp3`);
+  const muzikPath = path.join(tmpDir, `muzik_${uid}.mp3`);
+  const cikisPath = path.join(tmpDir, `siir_${uid}.mp3`);
+
+  try {
+    fs.writeFileSync(ttsPath, ttsBuffer);
+    fs.writeFileSync(muzikPath, muzikBuffer);
+
+    // Müzik sesi %25, TTS sesi %100 — TTS bitince müzik de biter
+    await execFileAsync("ffmpeg", [
+      "-i", ttsPath,
+      "-i", muzikPath,
+      "-filter_complex",
+      "[1:a]volume=0.25,afade=t=out:st=0:d=3[bg];[0:a][bg]amix=inputs=2:duration=first[out]",
+      "-map", "[out]",
+      "-y",
+      cikisPath,
+    ]);
+
+    return fs.readFileSync(cikisPath);
+  } catch (err) {
+    console.error("ffmpeg karıştırma hatası:", err);
+    return null;
+  } finally {
+    for (const p of [ttsPath, muzikPath, cikisPath]) {
+      try { fs.unlinkSync(p); } catch { /* zaten yoksa atla */ }
+    }
   }
 }
 
@@ -103,16 +175,31 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
     await message.channel.sendTyping();
 
-    const sesBuffer = await metniSeseCevir(okunacakMetin);
+    // TTS ve müziği paralel olarak al
+    const [sesBuffer, muzikBuffer] = await Promise.all([
+      metniSeseCevir(okunacakMetin),
+      getMuzikBuffer(),
+    ]);
 
     if (!sesBuffer) {
       await message.reply("❌ Ses üretilemedi, biraz sonra tekrar dene.");
       return;
     }
 
-    const dosya = new AttachmentBuilder(sesBuffer, { name: "siir.mp3" });
+    let finalBuffer: Buffer | null = null;
+
+    // Eğer müzik varsa ve ffmpeg mevcutsa karıştır
+    if (muzikBuffer) {
+      finalBuffer = await sesiMuzikleKaristir(sesBuffer, muzikBuffer);
+    }
+
+    // ffmpeg başarısız olursa sadece TTS'i gönder
+    const gonderilecek = finalBuffer ?? sesBuffer;
+    const dosyaAdi = finalBuffer ? "siir_muzikli.mp3" : "siir.mp3";
+
+    const dosya = new AttachmentBuilder(gonderilecek, { name: dosyaAdi });
     await message.reply({
-      content: `🎙️ **Şiir okunuyor...**\n> ${okunacakMetin}`,
+      content: `🎵 **Şiir okunuyor...**\n> ${okunacakMetin}`,
       files: [dosya],
     });
   }
