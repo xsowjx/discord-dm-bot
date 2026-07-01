@@ -209,9 +209,9 @@ async function handleDmAll(
     let failCount = 0;
     let processed = 0;
 
-    // 15'li gruplar halinde gönder, gruplar arası 500ms bekle
-    // 800 kişi → ~54 grup × 500ms ≈ ~30 saniye, rate limit olmaz
-    const BATCH_SIZE = 15;
+    // 10'lu gruplar halinde gönder, gruplar arası 750ms bekle
+      // 800 kişi → ~80 grup × 750ms ≈ ~60 saniye, rate limit yok
+      const BATCH_SIZE = 10;
 
     for (let i = 0; i < memberList.length; i += BATCH_SIZE) {
       const batch = memberList.slice(i, i + BATCH_SIZE);
@@ -234,7 +234,7 @@ async function handleDmAll(
         .catch(() => undefined);
 
       if (i + BATCH_SIZE < memberList.length) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 750));
       }
     }
 
