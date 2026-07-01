@@ -6,6 +6,7 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
   import * as path from "node:path";
   import { registerCommands } from "./deploy-commands.js";
   import { handleDmCommand } from "./commands/dm.js";
+  import { handleSesgel } from "./commands/sesgel.js";
   import { registerDmLogger } from "./events/dm-logger.js";
 
   const execFileAsync = promisify(execFile);
@@ -21,6 +22,7 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildVoiceStates,
       GatewayIntentBits.DirectMessages,
       GatewayIntentBits.MessageContent,
     ],
@@ -36,17 +38,24 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
 
   client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName === "dm") {
-      try {
+
+    const handler = async () => {
+      if (interaction.commandName === "dm") {
         await handleDmCommand(interaction);
-      } catch (err) {
-        console.error("Komut hatası:", err);
-        const msg = { content: "❌ Bir hata oluştu.", ephemeral: true };
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(msg);
-        } else {
-          await interaction.reply(msg);
-        }
+      } else if (interaction.commandName === "sesgel") {
+        await handleSesgel(interaction);
+      }
+    };
+
+    try {
+      await handler();
+    } catch (err) {
+      console.error("Komut hatası:", err);
+      const msg = { content: "❌ Bir hata oluştu.", ephemeral: true };
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp(msg);
+      } else {
+        await interaction.reply(msg);
       }
     }
   });
@@ -68,21 +77,15 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
 
   const YOUTUBE_PATTERN = /(?:youtube\.com\/watch|youtu\.be\/)/i;
 
-  // YouTube URL'sinden ses çek (yt-dlp)
   async function youtubedenSesAl(url: string): Promise<Buffer | null> {
     const tmpDir = os.tmpdir();
     const uid = Date.now();
     const cikisBase = path.join(tmpDir, `yt_${uid}`);
     try {
       await execFileAsync("yt-dlp", [
-        "-x",
-        "--audio-format", "mp3",
-        "--audio-quality", "5",
-        "-o", `${cikisBase}.%(ext)s`,
-        "--no-playlist",
-        "--max-downloads", "1",
-        "--socket-timeout", "15",
-        url,
+        "-x", "--audio-format", "mp3", "--audio-quality", "5",
+        "-o", `${cikisBase}.%(ext)s`, "--no-playlist", "--max-downloads", "1",
+        "--socket-timeout", "15", url,
       ]);
       const dosyaYolu = `${cikisBase}.mp3`;
       if (fs.existsSync(dosyaYolu)) {
@@ -142,13 +145,9 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
       fs.writeFileSync(ttsPath, ttsBuffer);
       fs.writeFileSync(muzikPath, muzikBuffer);
       await execFileAsync("ffmpeg", [
-        "-i", ttsPath,
-        "-i", muzikPath,
+        "-i", ttsPath, "-i", muzikPath,
         "-filter_complex", "[1:a]volume=0.2[bg];[0:a][bg]amix=inputs=2:duration=first[out]",
-        "-map", "[out]",
-        "-codec:a", "libmp3lame",
-        "-q:a", "4",
-        "-y", cikisPath,
+        "-map", "[out]", "-codec:a", "libmp3lame", "-q:a", "4", "-y", cikisPath,
       ]);
       return fs.readFileSync(cikisPath);
     } catch (err) {
@@ -188,7 +187,6 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
 
       await message.channel.sendTyping();
 
-      // YouTube varsa önce onu çek (zaman alabilir), TTS de paralel başlasın
       const [sesBuffer, muzikBuffer] = await Promise.all([
         metniSeseCevir(okunacakMetin),
         getMuzikBuffer(muzikUrl ?? undefined),
@@ -210,14 +208,12 @@ import { Client, Events, GatewayIntentBits, Partials, Message, AttachmentBuilder
 
       const dosya = new AttachmentBuilder(gonderilecek, { name: dosyaAdi });
 
-      // suppress: true — kullanıcının orijinal mesajındaki YouTube embed'i gizle
       await message.reply({
         content: `${ikon} **Şiir okunuyor...**\n> ${okunacakMetin}`,
         files: [dosya],
         allowedMentions: { repliedUser: false },
       });
 
-      // Orijinal mesajdaki YouTube embed'i kapat
       try {
         await message.suppressEmbeds(true);
       } catch { /* izin yoksa atla */ }
