@@ -34,23 +34,14 @@ import {
     }
   }
 
-  // ffmpeg ile mp3 → ogg/opus stream (opus kütüphanesi gerektirmez)
   function mp3YerindenOggOpusStream(mp3Path: string) {
-    const proc = spawn("ffmpeg", [
-      "-i", mp3Path,
-      "-c:a", "libopus",
-      "-b:a", "96k",
-      "-ar", "48000",
-      "-ac", "2",
-      "-f", "ogg",
-      "pipe:1",
-    ], { stdio: ["ignore", "pipe", "pipe"] });
-
-    proc.stderr.on("data", (d: Buffer) => {
-      // ffmpeg stderr'ı sessizce yut (çok verbose)
-      void d;
-    });
-
+    const proc = spawn(
+      "ffmpeg",
+      ["-i", mp3Path, "-c:a", "libopus", "-b:a", "96k", "-ar", "48000", "-ac", "2", "-f", "ogg", "pipe:1"],
+      { stdio: ["ignore", "pipe", "pipe"] }
+    );
+    proc.stderr.on("data", () => { /* ffmpeg verbose log yut */ });
+    proc.on("error", (e) => console.error("ffmpeg spawn hatası:", e));
     return proc.stdout;
   }
 
@@ -64,7 +55,6 @@ import {
 
     const member = interaction.member as GuildMember;
 
-    // Rol kontrolü
     const hasRole = member.roles.cache.some(
       (r) => r.name.toLowerCase() === AUTHORIZED_ROLE.toLowerCase()
     );
@@ -76,22 +66,17 @@ import {
       return;
     }
 
-    // Ses kanalı kontrolü
     const voiceChannel = member.voice.channel;
     if (!voiceChannel) {
       await interaction.reply({ content: "❌ Önce bir **ses kanalına** girmen lazım!", ephemeral: true });
       return;
     }
 
-    if (
-      voiceChannel.type !== ChannelType.GuildVoice &&
-      voiceChannel.type !== ChannelType.GuildStageVoice
-    ) {
+    if (voiceChannel.type !== ChannelType.GuildVoice && voiceChannel.type !== ChannelType.GuildStageVoice) {
       await interaction.reply({ content: "❌ Desteklenmeyen ses kanalı türü.", ephemeral: true });
       return;
     }
 
-    // İzin kontrolü
     const botMember = interaction.guild.members.me;
     if (botMember) {
       const perms = voiceChannel.permissionsFor(botMember);
@@ -108,7 +93,6 @@ import {
     const metin = interaction.options.getString("metin", true);
     await interaction.deferReply({ ephemeral: true });
 
-    // TTS ses üret
     const sesBuffer = await metniSeseCevir(metin);
     if (!sesBuffer) {
       await interaction.editReply("❌ TTS ses üretilemedi. Biraz sonra tekrar dene.");
@@ -127,15 +111,34 @@ import {
         adapterCreator: interaction.guild.voiceAdapterCreator,
       });
 
+      // ÖNEMLİ: @discordjs/voice'un resmi dökümanından zorunlu disconnect handler
+      // Bu olmadan voice server update gelince bağlantı aniden "aborted" oluyor
+      connection.on(VoiceConnectionStatus.Disconnected, async () => {
+        try {
+          await Promise.race([
+            entersState(connection!, VoiceConnectionStatus.Signalling, 5_000),
+            entersState(connection!, VoiceConnectionStatus.Connecting, 5_000),
+          ]);
+          // Yeniden bağlanmaya çalışıyor, devam et
+        } catch {
+          // Gerçek kopma, temizle
+          try { connection!.destroy(); } catch { /* yok */ }
+        }
+      });
+
       await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
 
-      // ffmpeg üzerinden OGG/Opus stream — opus kütüphanesi gerekmez
       const oggStream = mp3YerindenOggOpusStream(mp3Path);
       const resource = createAudioResource(oggStream, {
         inputType: StreamType.OggOpus,
       });
 
       const player = createAudioPlayer();
+
+      player.on("error", (err) => {
+        console.error("Audio player hatası:", err.message);
+      });
+
       connection.subscribe(player);
       player.play(resource);
 
