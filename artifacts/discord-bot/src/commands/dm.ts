@@ -207,21 +207,35 @@ async function handleDmAll(
     const total = memberList.length;
     let successCount = 0;
     let failCount = 0;
+    let processed = 0;
 
-    await interaction
-      .editReply({ content: `⏳ **${total}** kişiye aynı anda gönderiliyor…` })
-      .catch(() => undefined);
+    // 15'li gruplar halinde gönder, gruplar arası 500ms bekle
+    // 800 kişi → ~54 grup × 500ms ≈ ~30 saniye, rate limit olmaz
+    const BATCH_SIZE = 15;
 
-    const results = await Promise.allSettled(
-      memberList.map(async (member) => {
-        const memberPayload = await buildPayload(message);
-        await sendToUser(member.user, memberPayload);
-      })
-    );
+    for (let i = 0; i < memberList.length; i += BATCH_SIZE) {
+      const batch = memberList.slice(i, i + BATCH_SIZE);
 
-    for (const result of results) {
-      if (result.status === "fulfilled") successCount++;
-      else failCount++;
+      const results = await Promise.allSettled(
+        batch.map(async (member) => {
+          const memberPayload = await buildPayload(message);
+          await sendToUser(member.user, memberPayload);
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === "fulfilled") successCount++;
+        else failCount++;
+      }
+
+      processed += batch.length;
+      await interaction
+        .editReply({ content: `⏳ Gönderiliyor… **${processed}/${total}** işlendi.` })
+        .catch(() => undefined);
+
+      if (i + BATCH_SIZE < memberList.length) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
     }
 
     await interaction.editReply({
