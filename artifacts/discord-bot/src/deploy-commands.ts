@@ -1,36 +1,21 @@
 import { REST, Routes, SlashCommandBuilder } from "discord.js";
 import type { Client } from "discord.js";
 
+// Tek komut: /dm [isim veya "all"] [mesaj]
 const dmCommand = new SlashCommandBuilder()
   .setName("dm")
-  .setDescription("Kullanıcılara DM gönder (Sadece yetkililer)")
-  .addSubcommand((sub) =>
-    sub
-      .setName("user")
-      .setDescription("Belirli bir kullanıcıya DM gönder")
-      .addUserOption((opt) =>
-        opt
-          .setName("kullanici")
-          .setDescription("DM gönderilecek kullanıcı")
-          .setRequired(true)
-      )
-      .addStringOption((opt) =>
-        opt
-          .setName("mesaj")
-          .setDescription("Gönderilecek mesaj")
-          .setRequired(true)
-      )
+  .setDescription('Kullanıcıya DM gönder. Herkese göndermek için isim yerine "all" yaz.')
+  .addStringOption((opt) =>
+    opt
+      .setName("isim")
+      .setDescription('Kullanıcının sunucu ismi, veya herkese göndermek için "all"')
+      .setRequired(true)
   )
-  .addSubcommand((sub) =>
-    sub
-      .setName("all")
-      .setDescription("Sunucudaki herkese DM gönder")
-      .addStringOption((opt) =>
-        opt
-          .setName("mesaj")
-          .setDescription("Gönderilecek mesaj")
-          .setRequired(true)
-      )
+  .addStringOption((opt) =>
+    opt
+      .setName("mesaj")
+      .setDescription("Gönderilecek mesaj")
+      .setRequired(true)
   );
 
 export async function registerCommands(client: Client<true>): Promise<void> {
