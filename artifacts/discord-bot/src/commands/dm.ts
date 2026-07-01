@@ -202,36 +202,41 @@ async function handleDmAll(
       return;
     }
 
-    // Payload bir kere oluştur (medyayı bir kere indir)
-    const payload = await buildPayload(message);
     const humanMembers = members.filter((m) => !m.user.bot);
-    const total = humanMembers.size;
+    const memberList = [...humanMembers.values()];
+    const total = memberList.length;
     let successCount = 0;
     let failCount = 0;
     let processed = 0;
 
-    for (const [, member] of humanMembers) {
-      try {
-        // Her üye için payload'ı yeniden oluştur (attachment buffer'ı bir kere kullanılabilir)
-        const memberPayload = await buildPayload(message);
-        await sendToUser(member.user, memberPayload);
-        successCount++;
-      } catch {
-        failCount++;
-      }
-      processed++;
+    const BATCH_SIZE = 10;
+    const BATCH_DELAY_MS = 300;
 
-      if (processed % 10 === 0) {
-        await interaction
-          .editReply({ content: `⏳ Gönderiliyor… **${processed}/${total}** işlendi.` })
-          .catch(() => undefined);
+    for (let i = 0; i < memberList.length; i += BATCH_SIZE) {
+      const batch = memberList.slice(i, i + BATCH_SIZE);
+
+      const results = await Promise.allSettled(
+        batch.map(async (member) => {
+          const memberPayload = await buildPayload(message);
+          await sendToUser(member.user, memberPayload);
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === "fulfilled") successCount++;
+        else failCount++;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+      processed += batch.length;
+
+      await interaction
+        .editReply({ content: `⏳ Gönderiliyor… **${processed}/${total}** işlendi.` })
+        .catch(() => undefined);
+
+      if (i + BATCH_SIZE < memberList.length) {
+        await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+      }
     }
-
-    // payload değişkenini kullanıldı olarak işaretle
-    void payload;
 
     await interaction.editReply({
       content: [
