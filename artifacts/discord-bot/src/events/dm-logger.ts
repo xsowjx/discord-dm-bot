@@ -8,7 +8,7 @@ import {
   TextChannel,
 } from "discord.js";
 
-const LOG_CHANNEL_NAME = "bot dm";
+const LOG_CHANNEL_NAME = "bot-dm";
 
 /** Bot'a gelen tüm DM'leri "bot dm" kanalına ilet */
 export function registerDmLogger(client: Client): void {
