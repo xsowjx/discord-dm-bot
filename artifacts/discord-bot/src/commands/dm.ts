@@ -207,35 +207,21 @@ async function handleDmAll(
     const total = memberList.length;
     let successCount = 0;
     let failCount = 0;
-    let processed = 0;
 
-    const BATCH_SIZE = 10;
-    const BATCH_DELAY_MS = 300;
+    await interaction
+      .editReply({ content: `⏳ **${total}** kişiye aynı anda gönderiliyor…` })
+      .catch(() => undefined);
 
-    for (let i = 0; i < memberList.length; i += BATCH_SIZE) {
-      const batch = memberList.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      memberList.map(async (member) => {
+        const memberPayload = await buildPayload(message);
+        await sendToUser(member.user, memberPayload);
+      })
+    );
 
-      const results = await Promise.allSettled(
-        batch.map(async (member) => {
-          const memberPayload = await buildPayload(message);
-          await sendToUser(member.user, memberPayload);
-        })
-      );
-
-      for (const result of results) {
-        if (result.status === "fulfilled") successCount++;
-        else failCount++;
-      }
-
-      processed += batch.length;
-
-      await interaction
-        .editReply({ content: `⏳ Gönderiliyor… **${processed}/${total}** işlendi.` })
-        .catch(() => undefined);
-
-      if (i + BATCH_SIZE < memberList.length) {
-        await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
-      }
+    for (const result of results) {
+      if (result.status === "fulfilled") successCount++;
+      else failCount++;
     }
 
     await interaction.editReply({
