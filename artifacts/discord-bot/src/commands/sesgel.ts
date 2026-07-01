@@ -18,6 +18,11 @@ import {
   import * as fs from "node:fs";
   import * as os from "node:os";
   import * as path from "node:path";
+  import { createRequire } from "node:module";
+
+  const require = createRequire(import.meta.url);
+  // ffmpeg-static: tüm codec'leri (libopus dahil) barındıran static binary
+  const ffmpegPath: string = require("ffmpeg-static");
 
   const AUTHORIZED_ROLE = process.env.AUTHORIZED_ROLE ?? "Yetkili Ekibi";
 
@@ -36,7 +41,7 @@ import {
 
   function mp3YerindenOggOpusStream(mp3Path: string) {
     const proc = spawn(
-      "ffmpeg",
+      ffmpegPath,
       ["-i", mp3Path, "-c:a", "libopus", "-b:a", "96k", "-ar", "48000", "-ac", "2", "-f", "ogg", "pipe:1"],
       { stdio: ["ignore", "pipe", "pipe"] }
     );
@@ -111,17 +116,14 @@ import {
         adapterCreator: interaction.guild.voiceAdapterCreator,
       });
 
-      // ÖNEMLİ: @discordjs/voice'un resmi dökümanından zorunlu disconnect handler
-      // Bu olmadan voice server update gelince bağlantı aniden "aborted" oluyor
+      // Zorunlu disconnect handler — voice server update gelince kopmayı önler
       connection.on(VoiceConnectionStatus.Disconnected, async () => {
         try {
           await Promise.race([
             entersState(connection!, VoiceConnectionStatus.Signalling, 5_000),
             entersState(connection!, VoiceConnectionStatus.Connecting, 5_000),
           ]);
-          // Yeniden bağlanmaya çalışıyor, devam et
         } catch {
-          // Gerçek kopma, temizle
           try { connection!.destroy(); } catch { /* yok */ }
         }
       });
@@ -129,21 +131,15 @@ import {
       await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
 
       const oggStream = mp3YerindenOggOpusStream(mp3Path);
-      const resource = createAudioResource(oggStream, {
-        inputType: StreamType.OggOpus,
-      });
+      const resource = createAudioResource(oggStream, { inputType: StreamType.OggOpus });
 
       const player = createAudioPlayer();
-
-      player.on("error", (err) => {
-        console.error("Audio player hatası:", err.message);
-      });
+      player.on("error", (err) => console.error("Player hatası:", err.message));
 
       connection.subscribe(player);
       player.play(resource);
 
       await interaction.editReply(`🔊 **${voiceChannel.name}** kanalında söyleniyor...`);
-
       await entersState(player, AudioPlayerStatus.Idle, 60_000);
 
       connection.destroy();
