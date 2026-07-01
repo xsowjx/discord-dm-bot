@@ -1,6 +1,7 @@
-import { Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits, Partials } from "discord.js";
 import { registerCommands } from "./deploy-commands.js";
 import { handleDmCommand } from "./commands/dm.js";
+import { registerDmLogger } from "./events/dm-logger.js";
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
@@ -10,11 +11,23 @@ if (!token) {
   process.exit(1);
 }
 
-// GuildMembers: Privileged intent — Discord Developer Portal'da etkinleştirilmeli:
-// Bot → Privileged Gateway Intents → "Server Members Intent" = ON
+// Privileged intents — Discord Developer Portal'da etkinleştirilmeli:
+// Bot → Privileged Gateway Intents:
+//   ✅ Server Members Intent
+//   ✅ Message Content Intent
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+  // DM kanallarını dinlemek için Partial gerekli
+  partials: [Partials.Channel, Partials.Message],
 });
+
+// DM logger'ı kaydet (ready'den önce — mesajları kaçırma)
+registerDmLogger(client);
 
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`✅ Bot hazır: ${readyClient.user.tag}`);
