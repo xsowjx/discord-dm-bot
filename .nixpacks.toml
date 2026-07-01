@@ -1,8 +1,9 @@
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+  nixPkgs = ["nodejs_20", "ffmpeg"]
 
-[phases.install]
-cmds = ["npm install -g pnpm", "pnpm install --no-frozen-lockfile"]
+  [phases.install]
+  cmds = ["npm install -g pnpm", "pnpm install --no-frozen-lockfile"]
 
-[start]
-cmd = "pnpm --filter @workspace/discord-bot run dev"
+  [start]
+  cmd = "pnpm --filter @workspace/discord-bot run dev"
+  
