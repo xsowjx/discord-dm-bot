@@ -211,7 +211,7 @@ async function handleDmAll(
 
     // 10'lu gruplar halinde gönder, gruplar arası 750ms bekle
       // 800 kişi → ~80 grup × 750ms ≈ ~60 saniye, rate limit yok
-      const BATCH_SIZE = 10;
+      const BATCH_SIZE = 5;
 
     for (let i = 0; i < memberList.length; i += BATCH_SIZE) {
       const batch = memberList.slice(i, i + BATCH_SIZE);
