@@ -234,7 +234,7 @@ async function handleDmAll(
         .catch(() => undefined);
 
       if (i + BATCH_SIZE < memberList.length) {
-        await new Promise((resolve) => setTimeout(resolve, 750));
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       }
     }
 
