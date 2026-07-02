@@ -1,5 +1,5 @@
 [phases.setup]
-  nixPkgs = ["nodejs_20", "ffmpeg", "yt-dlp"]
+  nixPkgs = ["nodejs_20", "ffmpeg", "python3", "gcc", "gnumake"]
 
   [phases.install]
   cmds = ["npm install -g pnpm", "pnpm install --no-frozen-lockfile"]
