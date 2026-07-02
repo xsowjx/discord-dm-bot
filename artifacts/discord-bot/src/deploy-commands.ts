@@ -9,34 +9,29 @@ import { REST, Routes, SlashCommandBuilder } from "discord.js";
           .setName("user")
           .setDescription("Belirli bir kullanıcıya DM gönder")
           .addUserOption((opt) =>
-            opt
-              .setName("kullanici")
-              .setDescription("DM gönderilecek kullanıcıyı @etiketle")
-              .setRequired(true)
+            opt.setName("kullanici").setDescription("DM gönderilecek kullanıcıyı @etiketle").setRequired(true)
           )
           .addStringOption((opt) =>
-            opt
-              .setName("mesaj")
-              .setDescription("Gönderilecek mesaj")
-              .setRequired(true)
+            opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
           )
       )
       .addSubcommand((sub) =>
         sub
           .setName("all")
-          .setDescription("Sunucudaki herkese DM gönder")
+          .setDescription("Sunucudaki herkese DM gönder (baştan)")
           .addStringOption((opt) =>
-            opt
-              .setName("mesaj")
-              .setDescription("Gönderilecek mesaj")
-              .setRequired(true)
+            opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
+          )
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("devam")
+          .setDescription("Kaldığın yerden devam et — belirtilen kişiden itibaren DM gönder")
+          .addStringOption((opt) =>
+            opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
           )
           .addIntegerOption((opt) =>
-            opt
-              .setName("baslangic")
-              .setDescription("Kaçıncı kişiden başlansın? (kaldığın yerden devam et)")
-              .setRequired(false)
-              .setMinValue(1)
+            opt.setName("sayi").setDescription("Kaçıncı kişiden başlansın? (örn: 326)").setRequired(true).setMinValue(2)
           )
       );
 
@@ -44,10 +39,7 @@ import { REST, Routes, SlashCommandBuilder } from "discord.js";
       .setName("sesgel")
       .setDescription("Ses kanalına gir ve metin oku, sonra çık (Sadece Yetkili Ekibi)")
       .addStringOption((opt) =>
-        opt
-          .setName("metin")
-          .setDescription("Botun sesli okuyacağı metin")
-          .setRequired(true)
+        opt.setName("metin").setDescription("Botun sesli okuyacağı metin").setRequired(true)
       );
 
     export async function registerCommands(client: Client<true>): Promise<void> {
