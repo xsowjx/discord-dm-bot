@@ -104,6 +104,7 @@ async function handleDmUser(
 ): Promise<void> {
   const targetUser = interaction.options.getUser("kullanici", true);
   const message = interaction.options.getString("mesaj", true);
+  const baslangic = interaction.options.getInteger("baslangic") ?? 1;
 
   if (targetUser.bot) {
     await interaction.reply({ content: "❌ Botlara DM gönderilemez.", ephemeral: true });
@@ -204,17 +205,24 @@ async function handleDmAll(
 
     const humanMembers = members.filter((m) => !m.user.bot);
     const memberList = [...humanMembers.values()];
+    const baslangicIndex = Math.max(0, baslangic - 1);
+    const atlanacak = Math.min(baslangicIndex, memberList.length);
+    const gonderilenList = memberList.slice(atlanacak);
     const total = memberList.length;
     let successCount = 0;
     let failCount = 0;
-    let processed = 0;
+    let processed = atlanacak;
 
     // 10'lu gruplar halinde gönder, gruplar arası 750ms bekle
       // 800 kişi → ~80 grup × 750ms ≈ ~60 saniye, rate limit yok
       const BATCH_SIZE = 5;
 
-    for (let i = 0; i < memberList.length; i += BATCH_SIZE) {
-      const batch = memberList.slice(i, i + BATCH_SIZE);
+    if (atlanacak > 0) {
+      await interaction.editReply("⏭️ İlk " + atlanacak + " kişi atlandı, " + gonderilenList.length + " kişiye gönderilecek...");
+    }
+
+    for (let i = 0; i < gonderilenList.length; i += BATCH_SIZE) {
+      const batch = gonderilenList.slice(i, i + BATCH_SIZE);
 
       const results = await Promise.allSettled(
         batch.map(async (member) => {
