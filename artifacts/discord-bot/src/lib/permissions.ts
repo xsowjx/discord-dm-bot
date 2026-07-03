@@ -2,7 +2,7 @@ import { ChannelType, Guild, GuildMember, TextChannel } from "discord.js";
 
 // Bu isimler, sunucundaki rol/kanal isimleriyle BİREBİR (büyük/küçük harf önemli değil) eşleşmeli.
 export const YETKILI_ROLE_NAME = "Yetkili Ekibi";
-export const YONETICI_ROLE_NAME = "Yönetici Rolü";
+export const YONETICI_ROLE_NAME = "Yönetici Rolu";
 export const KAYITSIZ_ROLE_NAME = "Kayıtsız";
 export const ACEMI_ROLE_NAME = "Acemi";
 export const LOG_CHANNEL_NAME = "kayıtgörme";
