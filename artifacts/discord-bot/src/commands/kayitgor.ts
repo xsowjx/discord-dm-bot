@@ -3,7 +3,7 @@ import { YONETICI_ROLE_NAME, memberHasRoleNamed } from "../lib/permissions.js";
 import { getRegistrationCounts } from "../lib/registrationStore.js";
 
 export async function handleKayitGorCommand(interaction: ChatInputCommandInteraction): Promise<void> {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply();
 
   const guild = interaction.guild;
   const executor = interaction.member;
