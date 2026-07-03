@@ -7,7 +7,7 @@ import {
 } from "../lib/permissions.js";
 
 export async function handleRolAlCommand(interaction: ChatInputCommandInteraction): Promise<void> {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply();
 
   const guild = interaction.guild;
   const executor = interaction.member;
