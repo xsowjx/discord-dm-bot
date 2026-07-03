@@ -1,67 +1,106 @@
 import { REST, Routes, SlashCommandBuilder } from "discord.js";
-    import type { Client } from "discord.js";
+import type { Client } from "discord.js";
 
-    const dmCommand = new SlashCommandBuilder()
-      .setName("dm")
-      .setDescription("Kullanıcılara DM gönder (Sadece yetkililer)")
-      .addSubcommand((sub) =>
-        sub
-          .setName("user")
-          .setDescription("Belirli bir kullanıcıya DM gönder")
-          .addUserOption((opt) =>
-            opt.setName("kullanici").setDescription("DM gönderilecek kullanıcıyı @etiketle").setRequired(true)
-          )
-          .addStringOption((opt) =>
-            opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
-          )
+const dmCommand = new SlashCommandBuilder()
+  .setName("dm")
+  .setDescription("Kullanıcılara DM gönder (Sadece yetkililer)")
+  .addSubcommand((sub) =>
+    sub
+      .setName("user")
+      .setDescription("Belirli bir kullanıcıya DM gönder")
+      .addUserOption((opt) =>
+        opt.setName("kullanici").setDescription("DM gönderilecek kullanıcıyı @etiketle").setRequired(true)
       )
-      .addSubcommand((sub) =>
-        sub
-          .setName("all")
-          .setDescription("Sunucudaki herkese DM gönder (baştan)")
-          .addStringOption((opt) =>
-            opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
-          )
-      )
-      .addSubcommand((sub) =>
-        sub
-          .setName("devam")
-          .setDescription("Kaldığın yerden devam et — belirtilen kişiden itibaren DM gönder")
-          .addStringOption((opt) =>
-            opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
-          )
-          .addIntegerOption((opt) =>
-            opt.setName("sayi").setDescription("Kaçıncı kişiden başlansın? (örn: 326)").setRequired(true).setMinValue(2)
-          )
-      );
-
-    const sesgelCommand = new SlashCommandBuilder()
-      .setName("sesgel")
-      .setDescription("Ses kanalına gir ve metin oku, sonra çık (Sadece Yetkili Ekibi)")
       .addStringOption((opt) =>
-        opt.setName("metin").setDescription("Botun sesli okuyacağı metin").setRequired(true)
+        opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("all")
+      .setDescription("Sunucudaki herkese DM gönder (baştan)")
+      .addStringOption((opt) =>
+        opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("devam")
+      .setDescription("Kaldığın yerden devam et — belirtilen kişiden itibaren DM gönder")
+      .addStringOption((opt) =>
+        opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
+      )
+      .addIntegerOption((opt) =>
+        opt.setName("sayi").setDescription("Kaçıncı kişiden başlansın? (örn: 326)").setRequired(true).setMinValue(2)
+      )
+  );
+
+const sesgelCommand = new SlashCommandBuilder()
+  .setName("sesgel")
+  .setDescription("Ses kanalına gir ve metin oku, sonra çık (Sadece Yetkili Ekibi)")
+  .addStringOption((opt) =>
+    opt.setName("metin").setDescription("Botun sesli okuyacağı metin").setRequired(true)
+  );
+
+const kayitCommand = new SlashCommandBuilder()
+  .setName("k")
+  .setDescription("Bir kullanıcıyı kayıt et (Sadece Yetkili Rolü)")
+  .addUserOption((opt) =>
+    opt.setName("kullanici").setDescription("Kayıt edilecek kişi").setRequired(true)
+  );
+
+const rolVerCommand = new SlashCommandBuilder()
+  .setName("rolver")
+  .setDescription("Bir kullanıcıya rol ver (Sadece Yetkili Rolü)")
+  .addUserOption((opt) =>
+    opt.setName("kisi").setDescription("Rol verilecek kişi").setRequired(true)
+  )
+  .addRoleOption((opt) =>
+    opt.setName("rol").setDescription("Verilecek rol").setRequired(true)
+  );
+
+const rolAlCommand = new SlashCommandBuilder()
+  .setName("rolal")
+  .setDescription("Bir kullanıcıdan rol al (Sadece Yetkili Rolü)")
+  .addUserOption((opt) =>
+    opt.setName("kisi").setDescription("Rol alınacak kişi").setRequired(true)
+  )
+  .addRoleOption((opt) =>
+    opt.setName("rol").setDescription("Alınacak rol").setRequired(true)
+  );
+
+const kayitGorCommand = new SlashCommandBuilder()
+  .setName("kayıtgör")
+  .setDescription("Kim kaç kişi kayıt etmiş, listesini gösterir (Sadece Yönetici Rolü)");
+
+export async function registerCommands(client: Client): Promise<void> {
+  const token = process.env.DISCORD_TOKEN!;
+  const rest = new REST({ version: "10" }).setToken(token);
+  const guilds = client.guilds.cache;
+
+  if (guilds.size === 0) {
+    console.log("Hiç sunucu bulunamadı — komutlar kaydedilemedi.");
+    return;
+  }
+
+  const commands = [
+    dmCommand.toJSON(),
+    sesgelCommand.toJSON(),
+    kayitCommand.toJSON(),
+    rolVerCommand.toJSON(),
+    rolAlCommand.toJSON(),
+    kayitGorCommand.toJSON(),
+  ];
+
+  for (const [, guild] of guilds) {
+    try {
+      await rest.put(
+        Routes.applicationGuildCommands(client.user!.id, guild.id),
+        { body: commands }
       );
-
-    export async function registerCommands(client: Client<true>): Promise<void> {
-      const token = process.env.DISCORD_TOKEN!;
-      const rest = new REST({ version: "10" }).setToken(token);
-      const guilds = client.guilds.cache;
-
-      if (guilds.size === 0) {
-        console.log("Hiç sunucu bulunamadı — komutlar kaydedilemedi.");
-        return;
-      }
-
-      for (const [, guild] of guilds) {
-        try {
-          await rest.put(
-            Routes.applicationGuildCommands(client.user.id, guild.id),
-            { body: [dmCommand.toJSON(), sesgelCommand.toJSON()] }
-          );
-          console.log(`✅ Komutlar "${guild.name}" sunucusuna kaydedildi.`);
-        } catch (err) {
-          console.error(`❌ "${guild.name}" sunucusuna komut kaydedilemedi:`, err);
-        }
-      }
+      console.log(`✅ Komutlar "${guild.name}" sunucusuna kaydedildi.`);
+    } catch (err) {
+      console.error(`❌ "${guild.name}" sunucusuna komut kaydedilemedi:`, err);
     }
-  
+  }
+}
