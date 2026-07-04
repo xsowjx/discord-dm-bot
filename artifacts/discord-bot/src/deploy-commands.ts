@@ -14,25 +14,6 @@ const dmCommand = new SlashCommandBuilder()
       .addStringOption((opt) =>
         opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
       )
-  )
-  .addSubcommand((sub) =>
-    sub
-      .setName("all")
-      .setDescription("Sunucudaki herkese DM gönder (baştan)")
-      .addStringOption((opt) =>
-        opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
-      )
-  )
-  .addSubcommand((sub) =>
-    sub
-      .setName("devam")
-      .setDescription("Kaldığın yerden devam et — belirtilen kişiden itibaren DM gönder")
-      .addStringOption((opt) =>
-        opt.setName("mesaj").setDescription("Gönderilecek mesaj").setRequired(true)
-      )
-      .addIntegerOption((opt) =>
-        opt.setName("sayi").setDescription("Kaçıncı kişiden başlansın? (örn: 326)").setRequired(true).setMinValue(2)
-      )
   );
 
 const sesgelCommand = new SlashCommandBuilder()
