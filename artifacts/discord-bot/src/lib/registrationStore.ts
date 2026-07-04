@@ -65,4 +65,4 @@ export function clearRegistrations(guildId: string): number {
 }
 
 
-// Test: Volume/DATA_DIR kalıcılık kontrolü
+// Test: Volume/DATA_DIR kalıcılık kontrolü 2
