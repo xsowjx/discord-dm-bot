@@ -3,7 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "..", "data");
+const DATA_DIR = process.env.DATA_DIR && process.env.DATA_DIR.trim().length > 0
+  ? process.env.DATA_DIR
+  : path.join(__dirname, "..", "..", "data");
 const DATA_FILE = path.join(DATA_DIR, "registrations.json");
 
 export interface RegistrationRecord {
@@ -52,4 +54,12 @@ export function getRegistrationCounts(guildId: string): { byId: string; count: n
   return Array.from(counts.entries())
     .map(([byId, count]) => ({ byId, count }))
     .sort((a, b) => b.count - a.count);
+}
+
+export function clearRegistrations(guildId: string): number {
+  const records = readAll();
+  const remaining = records.filter((r) => r.guildId !== guildId);
+  const removedCount = records.length - remaining.length;
+  writeAll(remaining);
+  return removedCount;
 }
