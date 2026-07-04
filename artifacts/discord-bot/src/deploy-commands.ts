@@ -73,6 +73,10 @@ const kayitGorCommand = new SlashCommandBuilder()
   .setName("kayıtgör")
   .setDescription("Kim kaç kişi kayıt etmiş, listesini gösterir (Sadece Yönetici Rolü)");
 
+const kayitSifirlaCommand = new SlashCommandBuilder()
+  .setName("kayıtsıfırla")
+  .setDescription("Kayıt listesini sıfırlar (Sadece Yönetici Rolü)");
+
 export async function registerCommands(client: Client): Promise<void> {
   const token = process.env.DISCORD_TOKEN!;
   const rest = new REST({ version: "10" }).setToken(token);
@@ -90,6 +94,7 @@ export async function registerCommands(client: Client): Promise<void> {
     rolVerCommand.toJSON(),
     rolAlCommand.toJSON(),
     kayitGorCommand.toJSON(),
+    kayitSifirlaCommand.toJSON(),
   ];
 
   for (const [, guild] of guilds) {
