@@ -63,3 +63,6 @@ export function clearRegistrations(guildId: string): number {
   writeAll(remaining);
   return removedCount;
 }
+
+
+// Test: Volume/DATA_DIR kalıcılık kontrolü
