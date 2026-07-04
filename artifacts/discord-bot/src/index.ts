@@ -7,6 +7,7 @@ import { handleKayitCommand } from "./commands/kayit.js";
 import { handleRolVerCommand } from "./commands/rolver.js";
 import { handleRolAlCommand } from "./commands/rolal.js";
 import { handleKayitGorCommand } from "./commands/kayitgor.js";
+import { handleKayitSifirlaCommand } from "./commands/kayitsifirla.js";
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
@@ -33,6 +34,13 @@ client.once(Events.ClientReady, async (readyClient) => {
   await registerCommands(readyClient);
 });
 
+client.on(Events.GuildCreate, async (guild) => {
+  console.log(`➕ Yeni/tekrar katılınan sunucu: ${guild.name} — komutlar kaydediliyor.`);
+  if (client.isReady()) {
+    await registerCommands(client);
+  }
+});
+
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -51,6 +59,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleRolAlCommand(interaction);
     } else if (interaction.commandName === "kayıtgör") {
       await handleKayitGorCommand(interaction);
+    } else if (interaction.commandName === "kayıtsıfırla") {
+      await handleKayitSifirlaCommand(interaction);
     }
   } catch (err) {
     console.error("Komut hatası:", err);
