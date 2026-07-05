@@ -6,6 +6,7 @@ export const YONETICI_ROLE_NAME = "Yonetici Rolu";
 export const KAYITSIZ_ROLE_NAME = "Kayıtsız";
 export const ACEMI_ROLE_NAME = "Acemi";
 export const LOG_CHANNEL_NAME = "kayıtgörme";
+export const TICKET_LOG_CHANNEL_NAME = "ticket-log";
 
 export function findRoleByName(guild: Guild, name: string) {
   return guild.roles.cache.find(
@@ -23,19 +24,30 @@ export function getHighestRolePosition(member: GuildMember): number {
   return member.roles.highest.position;
 }
 
-export async function getLogChannel(guild: Guild): Promise<TextChannel | undefined> {
+export async function findTextChannelByName(
+  guild: Guild,
+  name: string
+): Promise<TextChannel | undefined> {
   let channel = guild.channels.cache.find(
     (ch) => ch.type === ChannelType.GuildText &&
-    ch.name.toLowerCase() === LOG_CHANNEL_NAME.toLowerCase()
+    ch.name.toLowerCase() === name.toLowerCase()
   ) as TextChannel | undefined;
 
   if (!channel) {
     const fetched = await guild.channels.fetch();
     channel = fetched.find(
       (ch) => ch?.type === ChannelType.GuildText &&
-      ch?.name?.toLowerCase() === LOG_CHANNEL_NAME.toLowerCase()
+      ch?.name?.toLowerCase() === name.toLowerCase()
     ) as TextChannel | undefined;
   }
 
   return channel;
+}
+
+export async function getLogChannel(guild: Guild): Promise<TextChannel | undefined> {
+  return findTextChannelByName(guild, LOG_CHANNEL_NAME);
+}
+
+export async function getTicketLogChannel(guild: Guild): Promise<TextChannel | undefined> {
+  return findTextChannelByName(guild, TICKET_LOG_CHANNEL_NAME);
 }
