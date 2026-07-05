@@ -8,6 +8,13 @@ import { handleRolVerCommand } from "./commands/rolver.js";
 import { handleRolAlCommand } from "./commands/rolal.js";
 import { handleKayitGorCommand } from "./commands/kayitgor.js";
 import { handleKayitSifirlaCommand } from "./commands/kayitsifirla.js";
+import {
+  handleTicketPanelCommand,
+  handleTicketOpenButton,
+  handleTicketCloseButton,
+  TICKET_OPEN_ID,
+  TICKET_CLOSE_PREFIX,
+} from "./commands/ticket.js";
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
@@ -42,33 +49,43 @@ client.on(Events.GuildCreate, async (guild) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-
   try {
-    if (interaction.commandName === "dm") {
-      await handleDmCommand(interaction);
-    } else if (interaction.commandName === "şarkıçal") {
-      await handleSarkiCal(interaction);
-    } else if (interaction.commandName === "skip") {
-      await handleSkip(interaction);
-    } else if (interaction.commandName === "k") {
-      await handleKayitCommand(interaction);
-    } else if (interaction.commandName === "rolver") {
-      await handleRolVerCommand(interaction);
-    } else if (interaction.commandName === "rolal") {
-      await handleRolAlCommand(interaction);
-    } else if (interaction.commandName === "kayıtgör") {
-      await handleKayitGorCommand(interaction);
-    } else if (interaction.commandName === "kayıtsıfırla") {
-      await handleKayitSifirlaCommand(interaction);
+    if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === "dm") {
+        await handleDmCommand(interaction);
+      } else if (interaction.commandName === "şarkıçal") {
+        await handleSarkiCal(interaction);
+      } else if (interaction.commandName === "skip") {
+        await handleSkip(interaction);
+      } else if (interaction.commandName === "k") {
+        await handleKayitCommand(interaction);
+      } else if (interaction.commandName === "rolver") {
+        await handleRolVerCommand(interaction);
+      } else if (interaction.commandName === "rolal") {
+        await handleRolAlCommand(interaction);
+      } else if (interaction.commandName === "kayıtgör") {
+        await handleKayitGorCommand(interaction);
+      } else if (interaction.commandName === "kayıtsıfırla") {
+        await handleKayitSifirlaCommand(interaction);
+      } else if (interaction.commandName === "ticketpanel") {
+        await handleTicketPanelCommand(interaction);
+      }
+    } else if (interaction.isButton()) {
+      if (interaction.customId === TICKET_OPEN_ID) {
+        await handleTicketOpenButton(interaction);
+      } else if (interaction.customId.startsWith(TICKET_CLOSE_PREFIX)) {
+        await handleTicketCloseButton(interaction);
+      }
     }
   } catch (err) {
-    console.error("Komut hatası:", err);
+    console.error("Etkileşim hatası:", err);
     const msg = { content: "❌ Bir hata oluştu.", ephemeral: true };
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp(msg);
-    } else {
-      await interaction.reply(msg);
+    if (interaction.isRepliable()) {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp(msg);
+      } else {
+        await interaction.reply(msg);
+      }
     }
   }
 });
