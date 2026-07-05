@@ -16,13 +16,6 @@ const dmCommand = new SlashCommandBuilder()
       )
   );
 
-const sesgelCommand = new SlashCommandBuilder()
-  .setName("sesgel")
-  .setDescription("Ses kanalına gir ve metin oku, sonra çık (Sadece Yetkili Ekibi)")
-  .addStringOption((opt) =>
-    opt.setName("metin").setDescription("Botun sesli okuyacağı metin").setRequired(true)
-  );
-
 const kayitCommand = new SlashCommandBuilder()
   .setName("k")
   .setDescription("Bir kullanıcıyı kayıt et (Sadece Yetkili Rolü)")
@@ -74,7 +67,6 @@ export async function registerCommands(client: Client): Promise<void> {
 
   const commands = [
     dmCommand.toJSON(),
-    sesgelCommand.toJSON(),
     kayitCommand.toJSON(),
     rolVerCommand.toJSON(),
     rolAlCommand.toJSON(),

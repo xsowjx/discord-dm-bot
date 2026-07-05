@@ -1,7 +1,6 @@
 import { Client, Events, GatewayIntentBits, Partials, Message } from "discord.js";
 import { registerCommands } from "./deploy-commands.js";
 import { handleDmCommand } from "./commands/dm.js";
-import { handleSarkiCal, handleSkip } from "./commands/sarkical.js";
 import { registerDmLogger } from "./events/dm-logger.js";
 import { handleKayitCommand } from "./commands/kayit.js";
 import { handleRolVerCommand } from "./commands/rolver.js";
@@ -12,8 +11,10 @@ import {
   handleTicketPanelCommand,
   handleTicketOpenButton,
   handleTicketCloseButton,
+  handleTicketClaimButton,
   TICKET_OPEN_ID,
   TICKET_CLOSE_PREFIX,
+  TICKET_CLAIM_ID,
 } from "./commands/ticket.js";
 
 const token = process.env.DISCORD_TOKEN;
@@ -53,10 +54,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand()) {
       if (interaction.commandName === "dm") {
         await handleDmCommand(interaction);
-      } else if (interaction.commandName === "şarkıçal") {
-        await handleSarkiCal(interaction);
-      } else if (interaction.commandName === "skip") {
-        await handleSkip(interaction);
       } else if (interaction.commandName === "k") {
         await handleKayitCommand(interaction);
       } else if (interaction.commandName === "rolver") {
@@ -73,6 +70,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else if (interaction.isButton()) {
       if (interaction.customId === TICKET_OPEN_ID) {
         await handleTicketOpenButton(interaction);
+      } else if (interaction.customId === TICKET_CLAIM_ID) {
+        await handleTicketClaimButton(interaction);
       } else if (interaction.customId.startsWith(TICKET_CLOSE_PREFIX)) {
         await handleTicketCloseButton(interaction);
       }

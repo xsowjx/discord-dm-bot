@@ -7,6 +7,7 @@ const DATA_DIR = process.env.DATA_DIR && process.env.DATA_DIR.trim().length > 0
   ? process.env.DATA_DIR
   : path.join(__dirname, "..", "..", "data");
 const DATA_FILE = path.join(DATA_DIR, "tickets.json");
+const CLAIMS_FILE = path.join(DATA_DIR, "ticket-claims.json");
 
 export interface TicketRecord {
   guildId: string;
@@ -14,6 +15,65 @@ export interface TicketRecord {
   openedById: string;
   closedById: string;
   timestamp: number;
+}
+
+export interface TicketClaimRecord {
+  claimedById: string;
+  timestamp: number;
+}
+
+type ClaimsMap = Record<string, TicketClaimRecord>;
+
+function ensureClaimsFile(): void {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(CLAIMS_FILE)) {
+    fs.writeFileSync(CLAIMS_FILE, "{}", "utf-8");
+  }
+}
+
+function readClaims(): ClaimsMap {
+  ensureClaimsFile();
+  try {
+    const raw = fs.readFileSync(CLAIMS_FILE, "utf-8");
+    return JSON.parse(raw) as ClaimsMap;
+  } catch {
+    return {};
+  }
+}
+
+function writeClaims(claims: ClaimsMap): void {
+  ensureClaimsFile();
+  fs.writeFileSync(CLAIMS_FILE, JSON.stringify(claims, null, 2), "utf-8");
+}
+
+/**
+ * Bir ticket kanalını belirli bir kullanıcıya sahiplendirir.
+ * Kanal zaten sahiplenilmişse (ve farklı biri tarafından) false döner ve hiçbir şey değiştirmez.
+ */
+export function claimTicket(channelId: string, claimedById: string): boolean {
+  const claims = readClaims();
+  const existing = claims[channelId];
+  if (existing && existing.claimedById !== claimedById) {
+    return false;
+  }
+  claims[channelId] = { claimedById, timestamp: Date.now() };
+  writeClaims(claims);
+  return true;
+}
+
+export function getTicketClaim(channelId: string): TicketClaimRecord | undefined {
+  const claims = readClaims();
+  return claims[channelId];
+}
+
+export function removeTicketClaim(channelId: string): void {
+  const claims = readClaims();
+  if (claims[channelId]) {
+    delete claims[channelId];
+    writeClaims(claims);
+  }
 }
 
 function ensureDataFile(): void {

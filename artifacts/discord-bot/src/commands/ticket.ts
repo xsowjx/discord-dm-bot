@@ -6,6 +6,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
+  ComponentType,
   PermissionsBitField,
   Colors,
   GuildMember,
@@ -17,10 +18,16 @@ import {
   memberHasRoleNamed,
   getTicketLogChannel,
 } from "../lib/permissions.js";
-import { addTicketClose } from "../lib/ticketStore.js";
+import {
+  addTicketClose,
+  claimTicket,
+  getTicketClaim,
+  removeTicketClaim,
+} from "../lib/ticketStore.js";
 
 export const TICKET_OPEN_ID = "ticket_open";
 export const TICKET_CLOSE_PREFIX = "ticket_close_";
+export const TICKET_CLAIM_ID = "ticket_claim";
 const TICKET_CATEGORY_NAME = "Ticketlar";
 
 export async function handleTicketPanelCommand(
@@ -160,7 +167,11 @@ export async function handleTicketOpenButton(
       )
       .setTimestamp();
 
-    const closeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(TICKET_CLAIM_ID)
+        .setLabel("🙋 Sahiplen")
+        .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId(`${TICKET_CLOSE_PREFIX}${interaction.user.id}`)
         .setLabel("🔒 Ticketi Kapat")
@@ -183,7 +194,7 @@ export async function handleTicketOpenButton(
     await ticketChannel.send({
       content: mentionLine,
       embeds: [welcomeEmbed],
-      components: [closeRow],
+      components: [actionRow],
       allowedMentions: { users: [interaction.user.id], roles: allowedRoleIds },
     });
 
@@ -206,6 +217,107 @@ export async function handleTicketOpenButton(
     await interaction.editReply(
       "❌ Ticket açılırken bir hata oluştu. Botun sunucuda \"Kanalları Yönet\" iznine sahip olduğundan emin ol."
     );
+  }
+}
+
+export async function handleTicketClaimButton(
+  interaction: ButtonInteraction
+): Promise<void> {
+  const guild = interaction.guild;
+  const member = interaction.member;
+  if (!guild || !member || !("roles" in member)) {
+    await interaction.reply({
+      content: "❌ Bu işlem sadece sunucuda yapılabilir.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const isAuthorized =
+    memberHasRoleNamed(member as GuildMember, YETKILI_ROLE_NAME) ||
+    memberHasRoleNamed(member as GuildMember, YONETICI_ROLE_NAME);
+
+  if (!isAuthorized) {
+    await interaction.reply({
+      content: `❌ Bu ticket'ı sadece **${YETKILI_ROLE_NAME}** veya **${YONETICI_ROLE_NAME}** sahiplenebilir.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const existingClaim = getTicketClaim(interaction.channelId);
+  if (existingClaim) {
+    if (existingClaim.claimedById === interaction.user.id) {
+      await interaction.reply({
+        content: "ℹ️ Bu ticket'ı zaten sen sahiplendin.",
+        ephemeral: true,
+      });
+      return;
+    }
+    await interaction.reply({
+      content: `❌ Bu ticket zaten <@${existingClaim.claimedById}> tarafından sahiplenilmiş.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const claimed = claimTicket(interaction.channelId, interaction.user.id);
+  if (!claimed) {
+    // Aynı anda iki kişi basarsa (race condition) — tekrar kontrol et.
+    const recheck = getTicketClaim(interaction.channelId);
+    await interaction.reply({
+      content: `❌ Bu ticket az önce <@${recheck?.claimedById}> tarafından sahiplenildi.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const originalEmbed = interaction.message.embeds[0];
+  const updatedEmbed = originalEmbed
+    ? EmbedBuilder.from(originalEmbed).addFields({
+        name: "🙋 Sahiplenen",
+        value: `<@${interaction.user.id}>`,
+      })
+    : new EmbedBuilder().setDescription(`Sahiplenen: <@${interaction.user.id}>`);
+
+  const firstRow = interaction.message.components[0];
+  const closeButton =
+    firstRow && firstRow.type === ComponentType.ActionRow
+      ? firstRow.components.find(
+          (c) => c.type === ComponentType.Button && "customId" in c && c.customId?.startsWith(TICKET_CLOSE_PREFIX)
+        )
+      : undefined;
+
+  const closeButtonCustomId =
+    closeButton && "customId" in closeButton && closeButton.customId
+      ? closeButton.customId
+      : `${TICKET_CLOSE_PREFIX}${interaction.user.id}`;
+
+  const updatedRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(TICKET_CLAIM_ID)
+      .setLabel(`🙋 Sahiplenildi: ${interaction.user.username}`)
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId(closeButtonCustomId)
+      .setLabel("🔒 Ticketi Kapat")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  await interaction.update({ embeds: [updatedEmbed], components: [updatedRow] });
+
+  const logChannel = await getTicketLogChannel(guild);
+  if (logChannel) {
+    const logEmbed = new EmbedBuilder()
+      .setColor(Colors.Blurple)
+      .setTitle("🙋 Ticket Sahiplenildi")
+      .addFields(
+        { name: "Sahiplenen", value: `<@${interaction.user.id}>`, inline: true },
+        { name: "Kanal", value: `<#${interaction.channelId}>`, inline: true }
+      )
+      .setTimestamp();
+    await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
   }
 }
 
@@ -234,6 +346,16 @@ export async function handleTicketCloseButton(
     return;
   }
 
+  const claim = getTicketClaim(interaction.channelId);
+  const isYonetici = memberHasRoleNamed(member as GuildMember, YONETICI_ROLE_NAME);
+  if (claim && claim.claimedById !== interaction.user.id && !isYonetici) {
+    await interaction.reply({
+      content: `❌ Bu ticket <@${claim.claimedById}> tarafından sahiplenilmiş. Sadece o veya bir **${YONETICI_ROLE_NAME}** kapatabilir.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
   const openedById = interaction.customId.slice(TICKET_CLOSE_PREFIX.length);
   const channelName = interaction.channel && "name" in interaction.channel
     ? (interaction.channel as { name: string }).name
@@ -246,6 +368,8 @@ export async function handleTicketCloseButton(
     closedById: interaction.user.id,
     timestamp: Date.now(),
   });
+
+  removeTicketClaim(interaction.channelId);
 
   await interaction.reply("🔒 Bu ticket 5 saniye içinde kapatılacak...");
 
