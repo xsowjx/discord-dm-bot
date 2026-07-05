@@ -16,6 +16,7 @@ import {
   findRoleByName,
   memberHasRoleNamed,
 } from "../lib/permissions.js";
+import { addTicketClose } from "../lib/ticketStore.js";
 
 export const TICKET_OPEN_ID = "ticket_open";
 export const TICKET_CLOSE_PREFIX = "ticket_close_";
@@ -204,6 +205,16 @@ export async function handleTicketCloseButton(
     });
     return;
   }
+
+  const openedById = interaction.customId.slice(TICKET_CLOSE_PREFIX.length);
+
+  addTicketClose({
+    guildId: guild.id,
+    channelId: interaction.channelId,
+    openedById,
+    closedById: interaction.user.id,
+    timestamp: Date.now(),
+  });
 
   await interaction.reply("🔒 Bu ticket 5 saniye içinde kapatılacak...");
 
