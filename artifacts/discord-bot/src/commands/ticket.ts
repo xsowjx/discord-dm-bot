@@ -15,6 +15,7 @@ import {
   YONETICI_ROLE_NAME,
   findRoleByName,
   memberHasRoleNamed,
+  getTicketLogChannel,
 } from "../lib/permissions.js";
 import { addTicketClose } from "../lib/ticketStore.js";
 
@@ -187,6 +188,19 @@ export async function handleTicketOpenButton(
     });
 
     await interaction.editReply(`✅ Ticket'ın oluşturuldu: <#${ticketChannel.id}>`);
+
+    const logChannel = await getTicketLogChannel(guild);
+    if (logChannel) {
+      const logEmbed = new EmbedBuilder()
+        .setColor(Colors.Green)
+        .setTitle("🎫 Ticket Açıldı")
+        .addFields(
+          { name: "Açan", value: `<@${interaction.user.id}>`, inline: true },
+          { name: "Kanal", value: `<#${ticketChannel.id}>`, inline: true }
+        )
+        .setTimestamp();
+      await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
+    }
   } catch (err) {
     console.error("Ticket açma hatası:", err);
     await interaction.editReply(
@@ -221,6 +235,9 @@ export async function handleTicketCloseButton(
   }
 
   const openedById = interaction.customId.slice(TICKET_CLOSE_PREFIX.length);
+  const channelName = interaction.channel && "name" in interaction.channel
+    ? (interaction.channel as { name: string }).name
+    : "bilinmiyor";
 
   addTicketClose({
     guildId: guild.id,
@@ -231,6 +248,20 @@ export async function handleTicketCloseButton(
   });
 
   await interaction.reply("🔒 Bu ticket 5 saniye içinde kapatılacak...");
+
+  const logChannel = await getTicketLogChannel(guild);
+  if (logChannel) {
+    const logEmbed = new EmbedBuilder()
+      .setColor(Colors.Red)
+      .setTitle("🔒 Ticket Kapatıldı")
+      .addFields(
+        { name: "Açan", value: `<@${openedById}>`, inline: true },
+        { name: "Kapatan", value: `<@${interaction.user.id}>`, inline: true },
+        { name: "Kanal", value: `#${channelName}`, inline: true }
+      )
+      .setTimestamp();
+    await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
+  }
 
   setTimeout(async () => {
     try {
