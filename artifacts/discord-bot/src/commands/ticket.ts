@@ -166,10 +166,24 @@ export async function handleTicketOpenButton(
         .setStyle(ButtonStyle.Danger)
     );
 
+    const roleMentions: string[] = [];
+    const allowedRoleIds: string[] = [];
+    if (yetkiliRole) {
+      roleMentions.push(`<@&${yetkiliRole.id}>`);
+      allowedRoleIds.push(yetkiliRole.id);
+    }
+    if (yoneticiRole) {
+      roleMentions.push(`<@&${yoneticiRole.id}>`);
+      allowedRoleIds.push(yoneticiRole.id);
+    }
+
+    const mentionLine = [`<@${interaction.user.id}>`, ...roleMentions].join(" ");
+
     await ticketChannel.send({
-      content: `<@${interaction.user.id}>`,
+      content: mentionLine,
       embeds: [welcomeEmbed],
       components: [closeRow],
+      allowedMentions: { users: [interaction.user.id], roles: allowedRoleIds },
     });
 
     await interaction.editReply(`✅ Ticket'ın oluşturuldu: <#${ticketChannel.id}>`);
