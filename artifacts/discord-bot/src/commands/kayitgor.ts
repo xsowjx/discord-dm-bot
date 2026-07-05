@@ -1,6 +1,7 @@
 import { ChatInputCommandInteraction, EmbedBuilder, Colors } from "discord.js";
 import { YONETICI_ROLE_NAME, memberHasRoleNamed } from "../lib/permissions.js";
 import { getRegistrationCounts } from "../lib/registrationStore.js";
+import { getTicketCounts } from "../lib/ticketStore.js";
 
 export async function handleKayitGorCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   await interaction.deferReply();
@@ -18,19 +19,26 @@ export async function handleKayitGorCommand(interaction: ChatInputCommandInterac
   }
 
   const counts = getRegistrationCounts(guild.id);
-
-  if (counts.length === 0) {
-    await interaction.editReply("📋 Henüz kimse kayıt yapmamış.");
-    return;
-  }
-
-  const lines = counts.map((c, i) => `**${i + 1}.** <@${c.byId}> — ${c.count} kayıt`);
+  const ticketCounts = getTicketCounts(guild.id);
 
   const embed = new EmbedBuilder()
     .setColor(Colors.Gold)
-    .setTitle("🏆 Kayıt Listesi")
-    .setDescription(lines.join("\n"))
+    .setTitle("🏆 Kayıt ve Ticket Listesi")
     .setTimestamp();
+
+  if (counts.length === 0) {
+    embed.addFields({ name: "📋 Kayıtlar", value: "Henüz kimse kayıt yapmamış." });
+  } else {
+    const lines = counts.map((c, i) => `**${i + 1}.** <@${c.byId}> — ${c.count} kayıt`);
+    embed.addFields({ name: "📋 Kayıtlar", value: lines.join("\n") });
+  }
+
+  if (ticketCounts.length === 0) {
+    embed.addFields({ name: "🎫 Kapatılan Ticketlar", value: "Henüz kimse ticket kapatmamış." });
+  } else {
+    const ticketLines = ticketCounts.map((c, i) => `**${i + 1}.** <@${c.byId}> — ${c.count} ticket`);
+    embed.addFields({ name: "🎫 Kapatılan Ticketlar", value: ticketLines.join("\n") });
+  }
 
   await interaction.editReply({ embeds: [embed] });
 }
