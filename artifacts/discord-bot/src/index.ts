@@ -7,6 +7,7 @@ import { handleRolVerCommand } from "./commands/rolver.js";
 import { handleRolAlCommand } from "./commands/rolal.js";
 import { handleKayitGorCommand } from "./commands/kayitgor.js";
 import { handleKayitSifirlaCommand } from "./commands/kayitsifirla.js";
+import { handleKayitsizAlCommand } from "./commands/kayitsizal.js";
 import {
   handleTicketPanelCommand,
   handleTicketOpenButton,
@@ -64,6 +65,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await handleKayitGorCommand(interaction);
       } else if (interaction.commandName === "kayıtsıfırla") {
         await handleKayitSifirlaCommand(interaction);
+      } else if (interaction.commandName === "kayıtsızal") {
+        await handleKayitsizAlCommand(interaction);
       } else if (interaction.commandName === "ticketpanel") {
         await handleTicketPanelCommand(interaction);
       }

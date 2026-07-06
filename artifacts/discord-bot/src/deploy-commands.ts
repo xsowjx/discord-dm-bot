@@ -51,6 +51,13 @@ const kayitSifirlaCommand = new SlashCommandBuilder()
   .setName("kayıtsıfırla")
   .setDescription("Kayıt listesini sıfırlar (Sadece Yönetici Rolü)");
 
+const kayitsizAlCommand = new SlashCommandBuilder()
+  .setName("kayıtsızal")
+  .setDescription("Bir kullanıcıyı kayıtsız yapar: Acemi rolünü alır, Kayıtsız rolünü verir (Sadece Yönetici Rolü)")
+  .addUserOption((opt) =>
+    opt.setName("kullanici").setDescription("Kayıtsız yapılacak kişi").setRequired(true)
+  );
+
 const ticketPanelCommand = new SlashCommandBuilder()
   .setName("ticketpanel")
   .setDescription("Bu kanala destek talebi (ticket) panelini gönderir (Sadece Yönetici Rolü)");
@@ -72,6 +79,7 @@ export async function registerCommands(client: Client): Promise<void> {
     rolAlCommand.toJSON(),
     kayitGorCommand.toJSON(),
     kayitSifirlaCommand.toJSON(),
+    kayitsizAlCommand.toJSON(),
     ticketPanelCommand.toJSON(),
   ];
 
