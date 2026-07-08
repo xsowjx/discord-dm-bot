@@ -1,6 +1,7 @@
 import { Client, Events, GatewayIntentBits, Partials, Message } from "discord.js";
 import { registerCommands } from "./deploy-commands.js";
 import { handleDmCommand } from "./commands/dm.js";
+import { registerInviteLogger } from "./events/invite-logger.js";
 import { registerDmLogger } from "./events/dm-logger.js";
 import { handleKayitCommand } from "./commands/kayit.js";
 import { handleRolVerCommand } from "./commands/rolver.js";
@@ -30,6 +31,7 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildInvites,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
   ],
@@ -37,7 +39,7 @@ const client = new Client({
 });
 
 registerDmLogger(client);
-
+registerInviteLogger(client);
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`✅ Bot hazır: ${readyClient.user.tag}`);
   await registerCommands(readyClient);
