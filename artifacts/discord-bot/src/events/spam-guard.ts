@@ -8,13 +8,15 @@ import {
 import { findTextChannelByName } from "../lib/permissions.js";
 
 const SPAM_LOG_CHANNEL_NAME = "spam-engel";
-const SPAM_THRESHOLD = 9; // aynı mesaj üst üste kaç kez atılırsa spam sayılır
+const WARNING_THRESHOLD = 4; // aynı mesaj bu sayıya ulaşınca sadece uyarı verilir
+const PUNISH_THRESHOLD = 9; // aynı mesaj bu sayıya ulaşınca silinir + timeout uygulanır
 const TIMEOUT_DURATION_MS = 24 * 60 * 60 * 1000; // 1 gün
 
 interface SpamTracker {
   content: string;
   count: number;
   messages: Message[];
+  warned: boolean;
 }
 
 // key: `${guildId}:${userId}:${channelId}`
@@ -39,18 +41,32 @@ export function registerSpamGuard(client: Client): void {
         existing.messages.push(message);
         tracker = existing;
       } else {
-        tracker = { content, count: 1, messages: [message] };
+        tracker = { content, count: 1, messages: [message], warned: false };
         spamMap.set(key, tracker);
       }
 
-      if (tracker.count >= SPAM_THRESHOLD) {
+      if (tracker.count >= PUNISH_THRESHOLD) {
         spamMap.delete(key); // aynı seri için tekrar tetiklenmesin
         await handleSpamDetected(message, tracker);
+      } else if (tracker.count >= WARNING_THRESHOLD && !tracker.warned) {
+        tracker.warned = true;
+        await handleSpamWarning(message, tracker);
       }
     } catch (err) {
       console.error("[spam-engel] mesaj işlenirken hata:", err);
     }
   });
+}
+
+async function handleSpamWarning(message: Message, tracker: SpamTracker): Promise<void> {
+  const channel = message.channel;
+  if (channel.type !== ChannelType.GuildText) return;
+
+  try {
+    await channel.send(`⚠️ <@${message.author.id}> dur aga spam atma!`);
+  } catch (err) {
+    console.error("[spam-engel] uyarı mesajı gönderilemedi:", err);
+  }
 }
 
 async function handleSpamDetected(message: Message, tracker: SpamTracker): Promise<void> {
