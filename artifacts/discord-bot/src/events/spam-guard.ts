@@ -9,8 +9,9 @@ import {
 import { findTextChannelByName } from "../lib/permissions.js";
 
 const SPAM_LOG_CHANNEL_NAME = "spam-engel";
-const WARNING_THRESHOLD = 4; // aynı mesaj bu sayıya ulaşınca sadece uyarı verilir
-const PUNISH_THRESHOLD = 9; // aynı mesaj bu sayıya ulaşınca silinir + timeout/webhook silme uygulanır
+const WARNING_THRESHOLD = 4; // aynı mesaj bu sayıya ulaşınca sadece uyarı verilir (normal kullanıcı)
+const PUNISH_THRESHOLD = 9; // aynı mesaj bu sayıya ulaşınca silinir + timeout uygulanır (normal kullanıcı)
+const WEBHOOK_PUNISH_THRESHOLD = 3; // webhook spam'i çok daha hızlı ve tehlikeli olabileceğinden erken müdahale edilir
 const TIMEOUT_DURATION_MS = 24 * 60 * 60 * 1000; // 1 gün
 
 interface SpamTracker {
@@ -60,7 +61,9 @@ export function registerSpamGuard(client: Client): void {
         spamMap.set(key, tracker);
       }
 
-      if (tracker.count >= PUNISH_THRESHOLD) {
+      const effectivePunishThreshold = tracker.isWebhook ? WEBHOOK_PUNISH_THRESHOLD : PUNISH_THRESHOLD;
+
+      if (tracker.count >= effectivePunishThreshold) {
         spamMap.delete(key); // aynı seri için tekrar tetiklenmesin
         await handleSpamDetected(message, tracker);
       } else if (tracker.count >= WARNING_THRESHOLD && !tracker.warned) {
@@ -116,6 +119,7 @@ async function handleSpamDetected(message: Message, tracker: SpamTracker): Promi
 
   let timeoutApplied = false;
   let webhookDeleted = false;
+  let webhookErrorDetail = "";
 
   if (tracker.isWebhook) {
     // Bir kullanıcıyı değil, spam'i gönderen webhook'un kendisini kaldırıyoruz.
@@ -124,15 +128,20 @@ async function handleSpamDetected(message: Message, tracker: SpamTracker): Promi
       const canManageWebhooks =
         botMember?.permissions.has(PermissionsBitField.Flags.ManageWebhooks) ?? false;
 
-      if (canManageWebhooks) {
+      if (!canManageWebhooks) {
+        webhookErrorDetail = "Botun 'Webhookleri Yönet' izni yok (permissions.has kontrolü false döndü).";
+      } else {
         const webhooks = await channel.fetchWebhooks();
         const targetWebhook = webhooks.find((wh) => wh.id === message.webhookId);
-        if (targetWebhook) {
+        if (!targetWebhook) {
+          webhookErrorDetail = `ID eşleşen webhook bu kanalda bulunamadı (webhookId: ${message.webhookId ?? "yok"}). Farklı bir kanala mı ait?`;
+        } else {
           await targetWebhook.delete("Spam engelleme: webhook üzerinden aynı mesaj tekrar tekrar atıldı");
           webhookDeleted = true;
         }
       }
     } catch (err) {
+      webhookErrorDetail = (err as Error).message ?? "Bilinmeyen hata";
       console.error("[spam-engel] webhook silinemedi:", err);
     }
   } else {
@@ -170,7 +179,7 @@ async function handleSpamDetected(message: Message, tracker: SpamTracker): Promi
               name: "Webhook Durumu",
               value: webhookDeleted
                 ? "✅ Webhook silindi"
-                : "⚠️ Webhook silinemedi (botun 'Webhookleri Yönet' yetkisi yok olabilir — elle sil: Kanal Ayarları → Entegrasyonlar → Webhookler)",
+                : `⚠️ Webhook silinemedi. Sebep: ${webhookErrorDetail || "bilinmiyor"}`,
               inline: false,
             }
           : {
