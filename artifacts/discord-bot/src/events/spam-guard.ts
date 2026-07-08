@@ -4,12 +4,13 @@ import {
   Colors,
   EmbedBuilder,
   Message,
+  PermissionsBitField,
 } from "discord.js";
 import { findTextChannelByName } from "../lib/permissions.js";
 
 const SPAM_LOG_CHANNEL_NAME = "spam-engel";
 const WARNING_THRESHOLD = 4; // aynı mesaj bu sayıya ulaşınca sadece uyarı verilir
-const PUNISH_THRESHOLD = 9; // aynı mesaj bu sayıya ulaşınca silinir + timeout uygulanır
+const PUNISH_THRESHOLD = 9; // aynı mesaj bu sayıya ulaşınca silinir + timeout/webhook silme uygulanır
 const TIMEOUT_DURATION_MS = 24 * 60 * 60 * 1000; // 1 gün
 
 interface SpamTracker {
@@ -17,15 +18,22 @@ interface SpamTracker {
   count: number;
   messages: Message[];
   warned: boolean;
+  isWebhook: boolean;
+  displayName: string;
 }
 
-// key: `${guildId}:${userId}:${channelId}`
+// key: `${guildId}:${authorId}:${channelId}`
 const spamMap = new Map<string, SpamTracker>();
 
 export function registerSpamGuard(client: Client): void {
   client.on("messageCreate", async (message: Message) => {
     try {
-      if (message.author.bot) return;
+      const isWebhook = Boolean(message.webhookId);
+
+      // Gerçek botları (webhook olmayan) yok say — kendi botumuz veya başka
+      // meşru botlar spam sayılmasın. Webhook mesajları (dışarıdan tetiklenen
+      // spam/raid araçları dahil) yine de takip edilir.
+      if (message.author.bot && !isWebhook) return;
       if (!message.guild) return;
       if (message.channel.type !== ChannelType.GuildText) return;
 
@@ -41,7 +49,14 @@ export function registerSpamGuard(client: Client): void {
         existing.messages.push(message);
         tracker = existing;
       } else {
-        tracker = { content, count: 1, messages: [message], warned: false };
+        tracker = {
+          content,
+          count: 1,
+          messages: [message],
+          warned: false,
+          isWebhook,
+          displayName: message.author.username,
+        };
         spamMap.set(key, tracker);
       }
 
@@ -62,8 +77,10 @@ async function handleSpamWarning(message: Message, tracker: SpamTracker): Promis
   const channel = message.channel;
   if (channel.type !== ChannelType.GuildText) return;
 
+  const mention = tracker.isWebhook ? `**${tracker.displayName}** (webhook)` : `<@${message.author.id}>`;
+
   try {
-    await channel.send(`⚠️ <@${message.author.id}> dur aga spam atma!`);
+    await channel.send(`⚠️ ${mention} dur aga spam atma!`);
   } catch (err) {
     console.error("[spam-engel] uyarı mesajı gönderilemedi:", err);
   }
@@ -74,9 +91,13 @@ async function handleSpamDetected(message: Message, tracker: SpamTracker): Promi
   const channel = message.channel;
   if (!guild || channel.type !== ChannelType.GuildText) return;
 
+  const mention = tracker.isWebhook ? `**${tracker.displayName}** (webhook)` : `<@${message.author.id}>`;
+
   try {
     await channel.send(
-      `🚫 <@${message.author.id}> dur bakalım, spam atma! Aynı mesajı **${tracker.count}** kez üst üste attığın için mesajların silindi ve **1 gün** susturuldun.`
+      tracker.isWebhook
+        ? `🚫 ${mention} üzerinden aynı mesaj **${tracker.count}** kez üst üste atıldığı için mesajlar silindi ve webhook kaldırılıyor.`
+        : `🚫 ${mention} dur bakalım, spam atma! Aynı mesajı **${tracker.count}** kez üst üste attığın için mesajların silindi ve **1 gün** susturuldun.`
     );
   } catch (err) {
     console.error("[spam-engel] uyarı mesajı gönderilemedi:", err);
@@ -94,18 +115,40 @@ async function handleSpamDetected(message: Message, tracker: SpamTracker): Promi
   }
 
   let timeoutApplied = false;
-  const member = await guild.members.fetch(message.author.id).catch(() => null);
-  if (member) {
+  let webhookDeleted = false;
+
+  if (tracker.isWebhook) {
+    // Bir kullanıcıyı değil, spam'i gönderen webhook'un kendisini kaldırıyoruz.
     try {
-      if (member.moderatable) {
-        await member.timeout(
-          TIMEOUT_DURATION_MS,
-          `Spam engelleme: aynı mesaj ${tracker.count} kez üst üste atıldı`
-        );
-        timeoutApplied = true;
+      const botMember = guild.members.me;
+      const canManageWebhooks =
+        botMember?.permissions.has(PermissionsBitField.Flags.ManageWebhooks) ?? false;
+
+      if (canManageWebhooks) {
+        const webhooks = await channel.fetchWebhooks();
+        const targetWebhook = webhooks.find((wh) => wh.id === message.webhookId);
+        if (targetWebhook) {
+          await targetWebhook.delete("Spam engelleme: webhook üzerinden aynı mesaj tekrar tekrar atıldı");
+          webhookDeleted = true;
+        }
       }
     } catch (err) {
-      console.error("[spam-engel] zaman aşımı uygulanamadı:", err);
+      console.error("[spam-engel] webhook silinemedi:", err);
+    }
+  } else {
+    const member = await guild.members.fetch(message.author.id).catch(() => null);
+    if (member) {
+      try {
+        if (member.moderatable) {
+          await member.timeout(
+            TIMEOUT_DURATION_MS,
+            `Spam engelleme: aynı mesaj ${tracker.count} kez üst üste atıldı`
+          );
+          timeoutApplied = true;
+        }
+      } catch (err) {
+        console.error("[spam-engel] zaman aşımı uygulanamadı:", err);
+      }
     }
   }
 
@@ -113,18 +156,30 @@ async function handleSpamDetected(message: Message, tracker: SpamTracker): Promi
   if (logChannel) {
     const embed = new EmbedBuilder()
       .setColor(Colors.Red)
-      .setTitle("🚫 Spam Engellendi")
+      .setTitle(tracker.isWebhook ? "🚫 Webhook Spam Engellendi" : "🚫 Spam Engellendi")
       .addFields(
-        { name: "Kullanıcı", value: `<@${message.author.id}>`, inline: true },
+        {
+          name: tracker.isWebhook ? "Webhook Adı" : "Kullanıcı",
+          value: tracker.isWebhook ? tracker.displayName : `<@${message.author.id}>`,
+          inline: true,
+        },
         { name: "Kanal", value: `<#${channel.id}>`, inline: true },
         { name: "Tekrar Sayısı", value: `${tracker.count}`, inline: true },
-        {
-          name: "Zaman Aşımı",
-          value: timeoutApplied
-            ? "✅ 1 gün uygulandı"
-            : "⚠️ Uygulanamadı (bot yetkisi/rol sıralaması yetersiz olabilir)",
-          inline: false,
-        },
+        tracker.isWebhook
+          ? {
+              name: "Webhook Durumu",
+              value: webhookDeleted
+                ? "✅ Webhook silindi"
+                : "⚠️ Webhook silinemedi (botun 'Webhookleri Yönet' yetkisi yok olabilir — elle sil: Kanal Ayarları → Entegrasyonlar → Webhookler)",
+              inline: false,
+            }
+          : {
+              name: "Zaman Aşımı",
+              value: timeoutApplied
+                ? "✅ 1 gün uygulandı"
+                : "⚠️ Uygulanamadı (bot yetkisi/rol sıralaması yetersiz olabilir)",
+              inline: false,
+            },
         {
           name: "Gönderilen Mesaj",
           value: tracker.content.slice(0, 1000) || "*[boş]*",
