@@ -11,7 +11,7 @@ import { findTextChannelByName } from "../lib/permissions.js";
 const SPAM_LOG_CHANNEL_NAME = "spam-engel";
 const WARNING_THRESHOLD = 4; // aynı mesaj bu sayıya ulaşınca sadece uyarı verilir (normal kullanıcı)
 const PUNISH_THRESHOLD = 9; // aynı mesaj bu sayıya ulaşınca silinir + timeout uygulanır (normal kullanıcı)
-const WEBHOOK_PUNISH_THRESHOLD = 3; // webhook spam'i çok daha hızlı ve tehlikeli olabileceğinden erken müdahale edilir
+const WEBHOOK_PUNISH_THRESHOLD = 9; // webhook spam'i için eşik (normal kullanıcıyla aynı)
 const TIMEOUT_DURATION_MS = 24 * 60 * 60 * 1000; // 1 gün
 
 interface SpamTracker {
