@@ -94,13 +94,9 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
         allow: [PermissionsBitField.Flags.ViewChannel],
       });
     }
-    if (yetkiliRole) {
-      overwrites.push({
-        id: yetkiliRole.id,
-        type: OverwriteType.Role,
-        allow: [PermissionsBitField.Flags.ViewChannel],
-      });
-    }
+
+    // NOT: Yetkili Ekibi artık bu kanalları göremiyor — sadece Yonetici Rolu
+    // ve gerçek "Yönetici" (Administrator) yetkisine sahip roller görebilir.
 
     // İsmi ne olursa olsun, sunucuda gerçek "Yönetici" (Administrator) yetkisine
     // sahip TÜM rollere de görünürlük ver — sadece botun oluşturduğu isme bağlı kalma.
@@ -108,8 +104,7 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
       (role) =>
         role.id !== guild!.roles.everyone.id &&
         role.permissions.has(PermissionsBitField.Flags.Administrator) &&
-        role.id !== yoneticiRole?.id &&
-        role.id !== yetkiliRole?.id
+        role.id !== yoneticiRole?.id
     );
     for (const role of adminRoles.values()) {
       overwrites.push({
