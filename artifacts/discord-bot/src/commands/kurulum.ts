@@ -68,39 +68,81 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
   await ensureRole(ACEMI_ROLE_NAME, Colors.Green);
   await ensureRole(KAYITSIZ_ROLE_NAME, Colors.Grey);
 
+  function buildLogChannelOverwrites(): {
+    id: string;
+    type: OverwriteType;
+    allow?: bigint[];
+    deny?: bigint[];
+  }[] {
+    const overwrites: {
+      id: string;
+      type: OverwriteType;
+      allow?: bigint[];
+      deny?: bigint[];
+    }[] = [
+      {
+        id: guild!.roles.everyone.id,
+        type: OverwriteType.Role,
+        deny: [PermissionsBitField.Flags.ViewChannel],
+      },
+    ];
+    if (yoneticiRole) {
+      overwrites.push({
+        id: yoneticiRole.id,
+        type: OverwriteType.Role,
+        allow: [PermissionsBitField.Flags.ViewChannel],
+      });
+    }
+    if (yetkiliRole) {
+      overwrites.push({
+        id: yetkiliRole.id,
+        type: OverwriteType.Role,
+        allow: [PermissionsBitField.Flags.ViewChannel],
+      });
+    }
+
+    // İsmi ne olursa olsun, sunucuda gerçek "Yönetici" (Administrator) yetkisine
+    // sahip TÜM rollere de görünürlük ver — sadece botun oluşturduğu isme bağlı kalma.
+    const adminRoles = guild!.roles.cache.filter(
+      (role) =>
+        role.id !== guild!.roles.everyone.id &&
+        role.permissions.has(PermissionsBitField.Flags.Administrator) &&
+        role.id !== yoneticiRole?.id &&
+        role.id !== yetkiliRole?.id
+    );
+    for (const role of adminRoles.values()) {
+      overwrites.push({
+        id: role.id,
+        type: OverwriteType.Role,
+        allow: [PermissionsBitField.Flags.ViewChannel],
+      });
+    }
+
+    // Komutu çalıştıran kişiye de garanti olsun diye özel olarak görünürlük ver.
+    overwrites.push({
+      id: interaction.user.id,
+      type: OverwriteType.Member,
+      allow: [PermissionsBitField.Flags.ViewChannel],
+    });
+
+    return overwrites;
+  }
+
   async function ensureLogChannel(name: string) {
     const existing = await findTextChannelByName(guild!, name);
     if (existing) {
       existingChannels.push(name);
+      // Zaten var olan kanalın izinlerini de düzeltiyoruz — belki daha önce
+      // yanlış/eksik rol yüzünden kimse göremiyordu, bu tekrar çalıştırınca düzelir.
+      try {
+        await existing.permissionOverwrites.set(buildLogChannelOverwrites());
+      } catch (err) {
+        errors.push(`#${name} izinleri güncellenemedi (${(err as Error).message})`);
+      }
       return existing;
     }
     try {
-      const overwrites: {
-        id: string;
-        type: OverwriteType.Role;
-        allow?: bigint[];
-        deny?: bigint[];
-      }[] = [
-        {
-          id: guild!.roles.everyone.id,
-          type: OverwriteType.Role,
-          deny: [PermissionsBitField.Flags.ViewChannel],
-        },
-      ];
-      if (yoneticiRole) {
-        overwrites.push({
-          id: yoneticiRole.id,
-          type: OverwriteType.Role,
-          allow: [PermissionsBitField.Flags.ViewChannel],
-        });
-      }
-      if (yetkiliRole) {
-        overwrites.push({
-          id: yetkiliRole.id,
-          type: OverwriteType.Role,
-          allow: [PermissionsBitField.Flags.ViewChannel],
-        });
-      }
+      const overwrites = buildLogChannelOverwrites();
 
       const channel = await guild!.channels.create({
         name,
