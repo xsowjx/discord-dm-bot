@@ -62,6 +62,10 @@ const ticketPanelCommand = new SlashCommandBuilder()
   .setName("ticketpanel")
   .setDescription("Bu kanala destek talebi (ticket) panelini gönderir (Sadece Yönetici Rolü)");
 
+const kurulumCommand = new SlashCommandBuilder()
+  .setName("kurulum")
+  .setDescription("Gerekli tüm rolleri ve log kanallarını otomatik oluşturur (Sadece Sahip/Yönetici)");
+
 export async function registerCommands(client: Client): Promise<void> {
   const token = process.env.DISCORD_TOKEN!;
   const rest = new REST({ version: "10" }).setToken(token);
@@ -81,6 +85,7 @@ export async function registerCommands(client: Client): Promise<void> {
     kayitSifirlaCommand.toJSON(),
     kayitsizAlCommand.toJSON(),
     ticketPanelCommand.toJSON(),
+    kurulumCommand.toJSON(),
   ];
 
   for (const [, guild] of guilds) {
