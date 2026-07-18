@@ -16,6 +16,7 @@ import {
   findRoleByName,
   findTextChannelByName,
 } from "../lib/permissions.js";
+import { buildTicketPanelMessage } from "./ticket.js";
 
 const DM_LOG_CHANNEL_NAME = "bot-dm";
 const INVITE_LOG_CHANNEL_NAME = "davet-log";
@@ -163,20 +164,41 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
   await ensureLogChannel(INVITE_LOG_CHANNEL_NAME);
   await ensureLogChannel(SPAM_LOG_CHANNEL_NAME);
 
+  const TICKET_SUPPORT_CHANNEL_NAME = "destek-kanali";
   try {
-    const existingCategory = guild.channels.cache.find(
+    await guild.channels.fetch(); // cache güncel olmayabilir, garantiye alıyoruz
+    let ticketCategory = guild.channels.cache.find(
       (ch) =>
         ch.type === ChannelType.GuildCategory &&
         ch.name.toLowerCase() === TICKET_CATEGORY_NAME.toLowerCase()
     );
-    if (!existingCategory) {
-      await guild.channels.create({ name: TICKET_CATEGORY_NAME, type: ChannelType.GuildCategory });
+
+    if (!ticketCategory) {
+      ticketCategory = await guild.channels.create({
+        name: TICKET_CATEGORY_NAME,
+        type: ChannelType.GuildCategory,
+      });
+      console.log(`[kurulum] "${TICKET_CATEGORY_NAME}" kategorisi oluşturuldu (id: ${ticketCategory.id}).`);
       createdChannels.push(`${TICKET_CATEGORY_NAME} (kategori)`);
     } else {
       existingChannels.push(`${TICKET_CATEGORY_NAME} (kategori)`);
     }
+
+    const existingSupportChannel = await findTextChannelByName(guild, TICKET_SUPPORT_CHANNEL_NAME);
+    if (!existingSupportChannel) {
+      const supportChannel = await guild.channels.create({
+        name: TICKET_SUPPORT_CHANNEL_NAME,
+        type: ChannelType.GuildText,
+        parent: ticketCategory.id,
+      });
+      await supportChannel.send(buildTicketPanelMessage());
+      createdChannels.push(`#${TICKET_SUPPORT_CHANNEL_NAME} (ticket paneli postalandı)`);
+    } else {
+      existingChannels.push(`#${TICKET_SUPPORT_CHANNEL_NAME}`);
+    }
   } catch (err) {
-    errors.push(`Ticket kategorisi oluşturulamadı: (${(err as Error).message})`);
+    console.error("[kurulum] Ticket kategorisi/kanalı oluşturulamadı:", err);
+    errors.push(`Ticket kategorisi/kanalı oluşturulamadı: (${(err as Error).message})`);
   }
 
   const embed = new EmbedBuilder()

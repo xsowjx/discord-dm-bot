@@ -30,6 +30,24 @@ export const TICKET_CLOSE_PREFIX = "ticket_close_";
 export const TICKET_CLAIM_ID = "ticket_claim";
 const TICKET_CATEGORY_NAME = "Ticketlar";
 
+export function buildTicketPanelMessage() {
+  const embed = new EmbedBuilder()
+    .setColor(Colors.Blue)
+    .setTitle("🎫 Destek Talebi")
+    .setDescription(
+      "Yardıma mı ihtiyacın var? Aşağıdaki butona tıklayarak sana özel bir destek kanalı aç.\n\nAçılan kanalı sadece **sen** ve **yetkililer** görebilecek."
+    );
+
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(TICKET_OPEN_ID)
+      .setLabel("🎫 Ticket Aç")
+      .setStyle(ButtonStyle.Success)
+  );
+
+  return { embeds: [embed], components: [row] };
+}
+
 export async function handleTicketPanelCommand(
   interaction: ChatInputCommandInteraction
 ): Promise<void> {
@@ -51,21 +69,7 @@ export async function handleTicketPanelCommand(
     return;
   }
 
-  const embed = new EmbedBuilder()
-    .setColor(Colors.Blue)
-    .setTitle("🎫 Destek Talebi")
-    .setDescription(
-      "Yardıma mı ihtiyacın var? Aşağıdaki butona tıklayarak sana özel bir destek kanalı aç.\n\nAçılan kanalı sadece **sen** ve **yetkililer** görebilecek."
-    );
-
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(TICKET_OPEN_ID)
-      .setLabel("🎫 Ticket Aç")
-      .setStyle(ButtonStyle.Success)
-  );
-
-  await interaction.reply({ embeds: [embed], components: [row] });
+  await interaction.reply(buildTicketPanelMessage());
 }
 
 export async function handleTicketOpenButton(
