@@ -80,6 +80,16 @@ const kanalTasiCommand = new SlashCommandBuilder()
       .setRequired(true)
   );
 
+const uyeAtCommand = new SlashCommandBuilder()
+  .setName("uyeat")
+  .setDescription("Bir üyeyi veya botu sunucudan atar (Sadece Yönetici Rolü/Administrator)")
+  .addUserOption((opt) =>
+    opt.setName("kullanici").setDescription("Atılacak üye/bot").setRequired(true)
+  )
+  .addStringOption((opt) =>
+    opt.setName("sebep").setDescription("Atma sebebi").setRequired(false)
+  );
+
 export async function registerCommands(client: Client): Promise<void> {
   const token = process.env.DISCORD_TOKEN!;
   const rest = new REST({ version: "10" }).setToken(token);
@@ -101,6 +111,7 @@ export async function registerCommands(client: Client): Promise<void> {
     ticketPanelCommand.toJSON(),
     kurulumCommand.toJSON(),
     kanalTasiCommand.toJSON(),
+    uyeAtCommand.toJSON(),
   ];
 
   for (const [, guild] of guilds) {

@@ -13,6 +13,7 @@ import { handleKayitSifirlaCommand } from "./commands/kayitsifirla.js";
 import { handleKayitsizAlCommand } from "./commands/kayitsizal.js";
 import { handleKurulumCommand } from "./commands/kurulum.js";
 import { handleKanalTasiCommand } from "./commands/kanaltasi.js";
+import { handleUyeAtCommand } from "./commands/uyeat.js";
 import {
   handleTicketPanelCommand,
   handleTicketOpenButton,
@@ -81,6 +82,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await handleKurulumCommand(interaction);
       } else if (interaction.commandName === "kanaltasi") {
         await handleKanalTasiCommand(interaction);
+      } else if (interaction.commandName === "uyeat") {
+        await handleUyeAtCommand(interaction);
       }
     } else if (interaction.isButton()) {
       if (interaction.customId === TICKET_OPEN_ID) {
