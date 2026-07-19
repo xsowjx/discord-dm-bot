@@ -9,6 +9,7 @@ import {
 } from "discord.js";
 
 const LOG_CHANNEL_NAME = "davet-log";
+const WELCOME_CHANNEL_NAME = "hoşgeldin";
 
 // guildId -> Map(inviteCode -> { uses, inviterTag, inviterId })
 const inviteCache = new Map<string, Map<string, { uses: number; inviterTag: string | null; inviterId: string | null }>>();
@@ -36,9 +37,9 @@ async function cacheGuildInvites(guild: import("discord.js").Guild): Promise<voi
   }
 }
 
-function findLogChannel(guild: import("discord.js").Guild): TextChannel | undefined {
+function findChannelByName(guild: import("discord.js").Guild, name: string): TextChannel | undefined {
   return guild.channels.cache.find(
-    (ch) => ch.type === ChannelType.GuildText && ch.name.toLowerCase() === LOG_CHANNEL_NAME
+    (ch) => ch.type === ChannelType.GuildText && ch.name.toLowerCase() === name.toLowerCase()
   ) as TextChannel | undefined;
 }
 
@@ -111,10 +112,9 @@ export function registerInviteLogger(client: Client): void {
       // Cache'i güncelle
       cacheGuildInvites(guild).catch(() => {});
 
-      const logChannel = findLogChannel(guild);
+      const logChannel = findChannelByName(guild, LOG_CHANNEL_NAME);
       if (!logChannel) {
         console.warn(`[davet-log] "${LOG_CHANNEL_NAME}" adında kanal bulunamadı.`);
-        return;
       }
 
       const invitedUser = member.user;
@@ -155,10 +155,86 @@ export function registerInviteLogger(client: Client): void {
         .setFooter({ text: `Kullanıcı ID: ${invitedUser.id}` })
         .setTimestamp();
 
-      await logChannel.send({ embeds: [embed] });
-      console.log(`[davet-log] ${invitedUser.tag} için log mesajı gönderildi.`);
+      if (logChannel) {
+        await logChannel.send({ embeds: [embed] });
+        console.log(`[davet-log] ${invitedUser.tag} için log mesajı gönderildi.`);
+      }
+
+      // --- Herkese açık, güzel görünümlü "hoşgeldin" paneli ---
+      const welcomeChannel = findChannelByName(guild, WELCOME_CHANNEL_NAME);
+      if (welcomeChannel) {
+        const welcomeEmbed = new EmbedBuilder()
+          .setColor(Colors.Gold)
+          .setTitle(`🎉 ${invitedUser.username} sunucumuza katıldı!`)
+          .setDescription(`Aramıza hoş geldin ${invitedUser}! Umarız burada güzel vakit geçirirsin. 🎊`)
+          .setThumbnail(invitedUser.displayAvatarURL({ size: 256 }))
+          .addFields(
+            {
+              name: "📅 Discord Üyeliği",
+              value: `<t:${accountCreatedTs}:D> (<t:${accountCreatedTs}:R>)`,
+              inline: true,
+            },
+            {
+              name: "🚀 Sunucuya Katılım",
+              value: `<t:${joinedTs}:D> (<t:${joinedTs}:R>)`,
+              inline: true,
+            },
+            { name: "🎫 Davet Eden", value: davetEdenValue, inline: false },
+            { name: "👥 Kaçıncı Üye", value: `${guild.memberCount}. üye`, inline: true }
+          )
+          .setFooter({ text: guild.name, iconURL: guild.iconURL() ?? undefined })
+          .setTimestamp();
+
+        await welcomeChannel.send({ content: `${invitedUser}`, embeds: [welcomeEmbed] }).catch((err) => {
+          console.error("[hoşgeldin] panel gönderilemedi:", err);
+        });
+      } else {
+        console.warn(`[hoşgeldin] "${WELCOME_CHANNEL_NAME}" adında kanal bulunamadı.`);
+      }
     } catch (err) {
       console.error("[davet-log] Beklenmeyen hata:", err);
+    }
+  });
+
+  // --- Herkese açık "hoşçakal" mesajı ---
+  client.on("guildMemberRemove", async (member) => {
+    try {
+      const guild = member.guild;
+      const user = member.user;
+      const welcomeChannel = findChannelByName(guild, WELCOME_CHANNEL_NAME);
+      if (!welcomeChannel) return;
+
+      const joinedTs = member.joinedTimestamp ? Math.floor(member.joinedTimestamp / 1000) : null;
+      const accountCreatedTs = Math.floor(user.createdTimestamp / 1000);
+
+      const goodbyeEmbed = new EmbedBuilder()
+        .setColor(Colors.DarkRed)
+        .setTitle(`👋 ${user.username} sunucudan ayrıldı`)
+        .setDescription(`**${user.tag}** aramızdan ayrıldı. Umarız tekrar görüşürüz!`)
+        .setThumbnail(user.displayAvatarURL({ size: 256 }))
+        .addFields(
+          {
+            name: "📅 Discord Üyeliği",
+            value: `<t:${accountCreatedTs}:D> (<t:${accountCreatedTs}:R>)`,
+            inline: true,
+          },
+          {
+            name: "🚪 Sunucudan Ayrılma",
+            value: joinedTs
+              ? `Sunucuya <t:${joinedTs}:D> tarihinde katılmıştı`
+              : "Katılma tarihi tespit edilemedi",
+            inline: true,
+          },
+          { name: "👥 Kalan Üye Sayısı", value: `${guild.memberCount} üye`, inline: true }
+        )
+        .setFooter({ text: guild.name, iconURL: guild.iconURL() ?? undefined })
+        .setTimestamp();
+
+      await welcomeChannel.send({ embeds: [goodbyeEmbed] }).catch((err) => {
+        console.error("[hoşçakal] mesaj gönderilemedi:", err);
+      });
+    } catch (err) {
+      console.error("[hoşçakal] Beklenmeyen hata:", err);
     }
   });
 }

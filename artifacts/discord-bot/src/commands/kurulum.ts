@@ -22,6 +22,7 @@ import { buildTicketPanelMessage } from "./ticket.js";
 const DM_LOG_CHANNEL_NAME = "bot-dm";
 const INVITE_LOG_CHANNEL_NAME = "davet-log";
 const SPAM_LOG_CHANNEL_NAME = "spam-engel";
+const WELCOME_CHANNEL_NAME = "hoşgeldin";
 const TICKET_CATEGORY_NAME = "Ticketlar";
 const LOG_CATEGORY_NAME = "Loglar";
 
@@ -187,6 +188,23 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
   await ensureLogChannel(DM_LOG_CHANNEL_NAME);
   await ensureLogChannel(INVITE_LOG_CHANNEL_NAME);
   await ensureLogChannel(SPAM_LOG_CHANNEL_NAME);
+
+  // "hoşgeldin" kanalı diğerlerinin aksine HERKESE AÇIK olmalı (gizli değil),
+  // bu yüzden ayrı ve özel izinsiz (varsayılan görünür) olarak oluşturuluyor.
+  try {
+    const existingWelcome = await findTextChannelByName(guild, WELCOME_CHANNEL_NAME);
+    if (existingWelcome) {
+      existingChannels.push(`#${WELCOME_CHANNEL_NAME}`);
+    } else {
+      await guild.channels.create({
+        name: WELCOME_CHANNEL_NAME,
+        type: ChannelType.GuildText,
+      });
+      createdChannels.push(`#${WELCOME_CHANNEL_NAME} (herkese açık)`);
+    }
+  } catch (err) {
+    errors.push(`#${WELCOME_CHANNEL_NAME} oluşturulamadı (${(err as Error).message})`);
+  }
 
   const TICKET_SUPPORT_CHANNEL_NAME = "destek-kanali";
   try {
