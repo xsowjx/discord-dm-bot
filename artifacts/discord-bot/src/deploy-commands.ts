@@ -1,4 +1,4 @@
-import { REST, Routes, SlashCommandBuilder } from "discord.js";
+import { REST, Routes, SlashCommandBuilder, ChannelType } from "discord.js";
 import type { Client } from "discord.js";
 
 const dmCommand = new SlashCommandBuilder()
@@ -66,6 +66,20 @@ const kurulumCommand = new SlashCommandBuilder()
   .setName("kurulum")
   .setDescription("Gerekli tüm rolleri ve log kanallarını otomatik oluşturur (Sadece Sahip/Yönetici)");
 
+const kanalTasiCommand = new SlashCommandBuilder()
+  .setName("kanaltasi")
+  .setDescription("Bir kanalı istediğin kategoriye taşır (Sadece Yönetici Rolü/Administrator)")
+  .addChannelOption((opt) =>
+    opt.setName("kanal").setDescription("Taşınacak kanal").setRequired(true)
+  )
+  .addChannelOption((opt) =>
+    opt
+      .setName("kategori")
+      .setDescription("Hedef kategori")
+      .addChannelTypes(ChannelType.GuildCategory)
+      .setRequired(true)
+  );
+
 export async function registerCommands(client: Client): Promise<void> {
   const token = process.env.DISCORD_TOKEN!;
   const rest = new REST({ version: "10" }).setToken(token);
@@ -86,6 +100,7 @@ export async function registerCommands(client: Client): Promise<void> {
     kayitsizAlCommand.toJSON(),
     ticketPanelCommand.toJSON(),
     kurulumCommand.toJSON(),
+    kanalTasiCommand.toJSON(),
   ];
 
   for (const [, guild] of guilds) {
