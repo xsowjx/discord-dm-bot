@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, PermissionsBitField } from "discord.js";
+import { ChatInputCommandInteraction } from "discord.js";
 import { YONETICI_ROLE_NAME, memberHasRoleNamed } from "../lib/permissions.js";
 import type { GuildMember } from "discord.js";
 
@@ -12,14 +12,10 @@ export async function handleUyeAtCommand(interaction: ChatInputCommandInteractio
     return;
   }
 
-  const isOwner = interaction.user.id === guild.ownerId;
-  const isAdmin = interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
   const isYonetici = memberHasRoleNamed(executor as GuildMember, YONETICI_ROLE_NAME);
 
-  if (!isOwner && !isAdmin && !isYonetici) {
-    await interaction.editReply(
-      `❌ Bu komutu sadece sunucu sahibi, **Yönetici (Administrator)** yetkisine sahip biri veya **${YONETICI_ROLE_NAME}** kullanabilir.`
-    );
+  if (!isYonetici) {
+    await interaction.editReply(`❌ Bu komutu sadece **${YONETICI_ROLE_NAME}** kullanabilir.`);
     return;
   }
 
