@@ -5,6 +5,7 @@ import {
   Colors,
   EmbedBuilder,
   OverwriteType,
+  CategoryChannel,
 } from "discord.js";
 import {
   YETKILI_ROLE_NAME,
@@ -22,6 +23,7 @@ const DM_LOG_CHANNEL_NAME = "bot-dm";
 const INVITE_LOG_CHANNEL_NAME = "davet-log";
 const SPAM_LOG_CHANNEL_NAME = "spam-engel";
 const TICKET_CATEGORY_NAME = "Ticketlar";
+const LOG_CATEGORY_NAME = "Loglar";
 
 export async function handleKurulumCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   await interaction.deferReply();
@@ -68,6 +70,24 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
   const yetkiliRole = await ensureRole(YETKILI_ROLE_NAME, Colors.Blue);
   await ensureRole(ACEMI_ROLE_NAME, Colors.Green);
   await ensureRole(KAYITSIZ_ROLE_NAME, Colors.Grey);
+
+  // "Loglar" kategorisini hazırlıyoruz — tüm log kanalları bunun altına toplanacak,
+  // böylece kanallar dağınık/kategorisiz görünmeyecek ve Discord'da düzgün taşınabilecek.
+  let logCategory: CategoryChannel | undefined;
+  try {
+    await guild.channels.fetch();
+    logCategory = guild.channels.cache.find(
+      (ch) => ch.type === ChannelType.GuildCategory && ch.name.toLowerCase() === LOG_CATEGORY_NAME.toLowerCase()
+    ) as CategoryChannel | undefined;
+    if (!logCategory) {
+      logCategory = await guild.channels.create({ name: LOG_CATEGORY_NAME, type: ChannelType.GuildCategory });
+      createdChannels.push(`${LOG_CATEGORY_NAME} (kategori)`);
+    } else {
+      existingChannels.push(`${LOG_CATEGORY_NAME} (kategori)`);
+    }
+  } catch (err) {
+    errors.push(`"${LOG_CATEGORY_NAME}" kategorisi oluşturulamadı: (${(err as Error).message})`);
+  }
 
   function buildLogChannelOverwrites(): {
     id: string;
@@ -135,6 +155,14 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
       } catch (err) {
         errors.push(`#${name} izinleri güncellenemedi (${(err as Error).message})`);
       }
+      // Kanal doğru kategoride değilse (örn. daha önce kategorisiz oluşmuşsa) taşıyoruz.
+      if (logCategory && existing.parentId !== logCategory.id) {
+        try {
+          await existing.setParent(logCategory.id, { lockPermissions: false });
+        } catch (err) {
+          errors.push(`#${name} "${LOG_CATEGORY_NAME}" kategorisine taşınamadı (${(err as Error).message})`);
+        }
+      }
       return existing;
     }
     try {
@@ -143,6 +171,7 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
       const channel = await guild!.channels.create({
         name,
         type: ChannelType.GuildText,
+        parent: logCategory?.id,
         permissionOverwrites: overwrites,
       });
       createdChannels.push(name);

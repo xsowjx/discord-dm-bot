@@ -17,11 +17,16 @@ const CURSE_WORDS = [
 ];
 
 // Atatürk'e yapılan atıflar — bunlarla birlikte küfür geçen mesajlar özel kategoride işlenir.
-const ATATURK_REFERENCES = ["atatürk", "ataturk", "mustafa kemal", "gazi mustafa kemal"];
+// "atatürk"/"mustafa kemal" tam ifadeler (substring kontrolü güvenli, çünkü çok kelimeli).
+const ATATURK_PHRASES = ["atatürk", "ataturk", "mustafa kemal", "gazi mustafa kemal"];
+// "ata" kelimesinin çekimli/küfür kalıpları (örn. "atanı sikeyim") — tam kelime eşleşmesiyle
+// kontrol edilir, çünkü bare "ata" çok yaygın kelimelerin (hata, kata, atari vb.) içinde geçebilir.
+const ATATURK_WORD_FORMS = ["atanı", "atani", "atana", "atası", "atasını", "atasini", "atamı", "atami"];
 
 // Dini değerlere yapılan atıflar.
 const RELIGIOUS_REFERENCES = [
   "allah", "peygamber", "muhammed", "muhammet", "kuran", "kur'an", "kur an", "islam", "i̇slam",
+  "kuran-ı kerim", "kuranıkerim", "kur'an-ı kerim", "kur an ı kerim",
 ];
 
 // key: `${guildId}:${userId}` — genel küfür ihlal sayacı (bot yeniden başlayınca sıfırlanır)
@@ -31,11 +36,12 @@ function normalize(text: string): string {
   return text.toLocaleLowerCase("tr-TR");
 }
 
-function containsCurseWord(normalizedContent: string): boolean {
-  // Kelimeleri harf olmayan karakterlerden ayırarak tek tek kontrol ediyoruz
-  // (yanlış pozitifleri önlemek için tam kelime eşleşmesi arıyoruz).
-  const tokens = normalizedContent.split(/[^a-zçğıöşü.]+/i).filter(Boolean);
-  return tokens.some((token) => CURSE_WORDS.includes(token));
+function tokenize(normalizedContent: string): string[] {
+  return normalizedContent.split(/[^a-zçğıöşü.]+/i).filter(Boolean);
+}
+
+function containsAnyToken(tokens: string[], list: string[]): boolean {
+  return tokens.some((token) => list.includes(token));
 }
 
 function containsAny(normalizedContent: string, list: string[]): boolean {
@@ -53,10 +59,12 @@ export function registerProfanityGuard(client: Client): void {
       if (!content) return;
 
       const normalized = normalize(content);
-      const hasCurse = containsCurseWord(normalized);
+      const tokens = tokenize(normalized);
+      const hasCurse = containsAnyToken(tokens, CURSE_WORDS);
       if (!hasCurse) return;
 
-      const isAtaturkInsult = containsAny(normalized, ATATURK_REFERENCES);
+      const isAtaturkInsult =
+        containsAny(normalized, ATATURK_PHRASES) || containsAnyToken(tokens, ATATURK_WORD_FORMS);
       const isReligiousInsult = !isAtaturkInsult && containsAny(normalized, RELIGIOUS_REFERENCES);
 
       if (isAtaturkInsult) {
