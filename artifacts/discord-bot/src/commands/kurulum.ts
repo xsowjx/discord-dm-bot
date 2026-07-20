@@ -33,6 +33,10 @@ const KAYITSIZ_ALLOWED_CHANNEL_NAMES = [
   KAYITSIZ_CHAT_CHANNEL_NAME,
   WELCOME_CHANNEL_NAME,
 ].map((n) => n.toLowerCase());
+// Bunlar SADECE Kayıtsız rolüne özel — hoşgeldin hariç (o herkese açık kalmalı).
+const KAYITSIZ_EXCLUSIVE_CHANNEL_NAMES = [...KAYITSIZ_VOICE_CHANNEL_NAMES, KAYITSIZ_CHAT_CHANNEL_NAME].map(
+  (n) => n.toLowerCase()
+);
 
 export async function handleKurulumCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   await interaction.deferReply();
@@ -325,6 +329,7 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
       let allowedCount = 0;
       for (const ch of allChannels.values()) {
         const isAllowed = KAYITSIZ_ALLOWED_CHANNEL_NAMES.includes(ch.name.toLowerCase());
+        const isKayitsizExclusive = KAYITSIZ_EXCLUSIVE_CHANNEL_NAMES.includes(ch.name.toLowerCase());
         try {
           if (isAllowed) {
             await ch.permissionOverwrites.edit(kayitsizRole.id, {
@@ -335,6 +340,12 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
           } else {
             await ch.permissionOverwrites.edit(kayitsizRole.id, { ViewChannel: false });
             restrictedCount++;
+          }
+
+          // Kayıtsız'a özel kanallar (hoşgeldin hariç) @everyone'dan da gizlenir —
+          // böylece sadece Kayıtsız rolüne sahip olanlar görebilir, başka kimse değil.
+          if (isKayitsizExclusive) {
+            await ch.permissionOverwrites.edit(guild!.roles.everyone.id, { ViewChannel: false });
           }
         } catch (err) {
           errors.push(`#${ch.name} için Kayıtsız izni ayarlanamadı (${(err as Error).message})`);
