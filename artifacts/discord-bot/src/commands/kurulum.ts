@@ -25,6 +25,15 @@ const SPAM_LOG_CHANNEL_NAME = "spam-engel";
 const WELCOME_CHANNEL_NAME = "hoşgeldin";
 const TICKET_CATEGORY_NAME = "Ticketlar";
 const LOG_CATEGORY_NAME = "Loglar";
+const KAYITSIZ_CATEGORY_NAME = "Kayıt Ol";
+const KAYITSIZ_VOICE_CHANNEL_NAMES = ["kayıt sesli 1", "kayıt sesli 2", "kayıt sesli 3"];
+const KAYITSIZ_CHAT_CHANNEL_NAME = "kayıtsız-sohbet";
+// Kayıtsız rolünün görebileceği TEK kanallar bunlar (+ hoşgeldin, herkese açık olduğu için zaten görünür).
+const KAYITSIZ_ALLOWED_CHANNEL_NAMES = [
+  ...KAYITSIZ_VOICE_CHANNEL_NAMES,
+  KAYITSIZ_CHAT_CHANNEL_NAME,
+  WELCOME_CHANNEL_NAME,
+].map((n) => n.toLowerCase());
 
 export async function handleKurulumCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   await interaction.deferReply();
@@ -70,7 +79,7 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
   const yoneticiRole = await ensureRole(YONETICI_ROLE_NAME, Colors.Red);
   const yetkiliRole = await ensureRole(YETKILI_ROLE_NAME, Colors.Blue);
   await ensureRole(ACEMI_ROLE_NAME, Colors.Green);
-  await ensureRole(KAYITSIZ_ROLE_NAME, Colors.Grey);
+  const kayitsizRole = await ensureRole(KAYITSIZ_ROLE_NAME, Colors.Grey);
 
   // "Loglar" kategorisini hazırlıyoruz — tüm log kanalları bunun altına toplanacak,
   // böylece kanallar dağınık/kategorisiz görünmeyecek ve Discord'da düzgün taşınabilecek.
@@ -241,6 +250,90 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
   } catch (err) {
     console.error("[kurulum] Ticket kategorisi/kanalı oluşturulamadı:", err);
     errors.push(`Ticket kategorisi/kanalı oluşturulamadı: (${(err as Error).message})`);
+  }
+
+  // --- Kayıtsız rolü için özel "Kayıt Ol" kategorisi ve kanalları ---
+  try {
+    await guild.channels.fetch();
+    let kayitsizCategory = guild.channels.cache.find(
+      (ch) =>
+        ch.type === ChannelType.GuildCategory &&
+        ch.name.toLowerCase() === KAYITSIZ_CATEGORY_NAME.toLowerCase()
+    ) as CategoryChannel | undefined;
+
+    if (!kayitsizCategory) {
+      kayitsizCategory = await guild.channels.create({
+        name: KAYITSIZ_CATEGORY_NAME,
+        type: ChannelType.GuildCategory,
+      });
+      createdChannels.push(`${KAYITSIZ_CATEGORY_NAME} (kategori)`);
+    } else {
+      existingChannels.push(`${KAYITSIZ_CATEGORY_NAME} (kategori)`);
+    }
+
+    for (const voiceName of KAYITSIZ_VOICE_CHANNEL_NAMES) {
+      const existingVoice = guild.channels.cache.find(
+        (ch) => ch.type === ChannelType.GuildVoice && ch.name.toLowerCase() === voiceName.toLowerCase()
+      );
+      if (existingVoice) {
+        existingChannels.push(`🔊 ${voiceName}`);
+      } else {
+        await guild.channels.create({
+          name: voiceName,
+          type: ChannelType.GuildVoice,
+          parent: kayitsizCategory.id,
+        });
+        createdChannels.push(`🔊 ${voiceName}`);
+      }
+    }
+
+    const existingKayitsizChat = await findTextChannelByName(guild, KAYITSIZ_CHAT_CHANNEL_NAME);
+    if (existingKayitsizChat) {
+      existingChannels.push(`#${KAYITSIZ_CHAT_CHANNEL_NAME}`);
+    } else {
+      await guild.channels.create({
+        name: KAYITSIZ_CHAT_CHANNEL_NAME,
+        type: ChannelType.GuildText,
+        parent: kayitsizCategory.id,
+      });
+      createdChannels.push(`#${KAYITSIZ_CHAT_CHANNEL_NAME}`);
+    }
+  } catch (err) {
+    errors.push(`Kayıtsız kanalları oluşturulamadı: (${(err as Error).message})`);
+  }
+
+  // --- Kayıtsız rolü SADECE izin verilen kanalları görebilsin, geri kalan HER ŞEY gizli olsun ---
+  if (kayitsizRole) {
+    try {
+      await guild.channels.fetch();
+      const allChannels = guild.channels.cache.filter(
+        (ch) => ch.type === ChannelType.GuildText || ch.type === ChannelType.GuildVoice
+      );
+      let restrictedCount = 0;
+      let allowedCount = 0;
+      for (const ch of allChannels.values()) {
+        const isAllowed = KAYITSIZ_ALLOWED_CHANNEL_NAMES.includes(ch.name.toLowerCase());
+        try {
+          if (isAllowed) {
+            await ch.permissionOverwrites.edit(kayitsizRole.id, {
+              ViewChannel: true,
+              ...(ch.type === ChannelType.GuildVoice ? { Connect: true } : {}),
+            });
+            allowedCount++;
+          } else {
+            await ch.permissionOverwrites.edit(kayitsizRole.id, { ViewChannel: false });
+            restrictedCount++;
+          }
+        } catch (err) {
+          errors.push(`#${ch.name} için Kayıtsız izni ayarlanamadı (${(err as Error).message})`);
+        }
+      }
+      existingChannels.push(
+        `Kayıtsız izinleri: ${allowedCount} kanal görünür bırakıldı, ${restrictedCount} kanal gizlendi`
+      );
+    } catch (err) {
+      errors.push(`Kayıtsız izin taraması başarısız oldu: (${(err as Error).message})`);
+    }
   }
 
   const embed = new EmbedBuilder()
