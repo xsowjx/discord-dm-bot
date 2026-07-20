@@ -8,7 +8,6 @@ import {
   CategoryChannel,
 } from "discord.js";
 import {
-  YETKILI_ROLE_NAME,
   YONETICI_ROLE_NAME,
   KAYITSIZ_ROLE_NAME,
   ACEMI_ROLE_NAME,
@@ -77,7 +76,6 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
   }
 
   const yoneticiRole = await ensureRole(YONETICI_ROLE_NAME, Colors.Red);
-  const yetkiliRole = await ensureRole(YETKILI_ROLE_NAME, Colors.Blue);
   await ensureRole(ACEMI_ROLE_NAME, Colors.Green);
   const kayitsizRole = await ensureRole(KAYITSIZ_ROLE_NAME, Colors.Grey);
 
@@ -198,18 +196,32 @@ export async function handleKurulumCommand(interaction: ChatInputCommandInteract
   await ensureLogChannel(INVITE_LOG_CHANNEL_NAME);
   await ensureLogChannel(SPAM_LOG_CHANNEL_NAME);
 
-  // "hoşgeldin" kanalı diğerlerinin aksine HERKESE AÇIK olmalı (gizli değil),
-  // bu yüzden ayrı ve özel izinsiz (varsayılan görünür) olarak oluşturuluyor.
+  // "hoşgeldin" kanalı HERKESE AÇIK (herkes görebilir) ama SALT OKUNUR —
+  // sadece bot mesaj postalayabilir, üyeler yazamaz (duyuru kanalı gibi).
   try {
     const existingWelcome = await findTextChannelByName(guild, WELCOME_CHANNEL_NAME);
+    const welcomeOverwrites = [
+      {
+        id: guild.roles.everyone.id,
+        type: OverwriteType.Role,
+        allow: [PermissionsBitField.Flags.ViewChannel],
+        deny: [PermissionsBitField.Flags.SendMessages],
+      },
+    ];
     if (existingWelcome) {
       existingChannels.push(`#${WELCOME_CHANNEL_NAME}`);
+      try {
+        await existingWelcome.permissionOverwrites.set(welcomeOverwrites);
+      } catch (err) {
+        errors.push(`#${WELCOME_CHANNEL_NAME} izinleri güncellenemedi (${(err as Error).message})`);
+      }
     } else {
       await guild.channels.create({
         name: WELCOME_CHANNEL_NAME,
         type: ChannelType.GuildText,
+        permissionOverwrites: welcomeOverwrites,
       });
-      createdChannels.push(`#${WELCOME_CHANNEL_NAME} (herkese açık)`);
+      createdChannels.push(`#${WELCOME_CHANNEL_NAME} (herkese açık, salt okunur)`);
     }
   } catch (err) {
     errors.push(`#${WELCOME_CHANNEL_NAME} oluşturulamadı (${(err as Error).message})`);
