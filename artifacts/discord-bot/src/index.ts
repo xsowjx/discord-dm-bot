@@ -5,6 +5,7 @@ import { registerInviteLogger } from "./events/invite-logger.js";
 import { registerSpamGuard } from "./events/spam-guard.js";
 import { registerProfanityGuard } from "./events/profanity-guard.js";
 import { registerAutoRole } from "./events/auto-role.js";
+import { registerSelfRoleTop } from "./events/self-role-top.js";
 import { registerDmLogger } from "./events/dm-logger.js";
 import { handleKayitCommand } from "./commands/kayit.js";
 import { handleRolVerCommand } from "./commands/rolver.js";
@@ -49,6 +50,7 @@ registerInviteLogger(client);
 registerSpamGuard(client);
 registerProfanityGuard(client);
 registerAutoRole(client);
+registerSelfRoleTop(client);
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`✅ Bot hazır: ${readyClient.user.tag}`);
   await registerCommands(readyClient);
